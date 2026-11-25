@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run tests
+        run: go test -race ./...
+      - name: Build darwin/arm64 and darwin/amd64 archives
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+          for ARCH in arm64 amd64; do
+            STAGE="release/agym_${VERSION}_darwin_${ARCH}"
+            mkdir -p "$STAGE"
+            CGO_ENABLED=1 GOOS=darwin GOARCH="$ARCH" go build -tags production -ldflags="-s -w" -o "$STAGE/agym" .
+            cp README.md README.zh-CN.md LICENSE "$STAGE/"
+            tar -C "$STAGE" -czf "release/agym_${VERSION}_darwin_${ARCH}.tar.gz" agym README.md README.zh-CN.md LICENSE
+          done
+          (cd release && shasum -a 256 *.tar.gz > checksums.txt)
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.tar.gz
+            release/checksums.txt
+          generate_release_notes: true
