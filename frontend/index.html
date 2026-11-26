@@ -12,50 +12,65 @@
     <header class="topbar">
       <div class="brand-mark" aria-hidden="true">A</div>
       <div class="heading">
-        <h1 data-i18n="app.title">账户管理</h1>
+        <h1 data-i18n="app.title">Agy Manager</h1>
       </div>
-      <span id="account-count" class="count">0</span>
       <button id="lang-toggle" class="icon-pill" type="button" data-i18n="lang.toggle" data-i18n-title="lang.toggleTitle" title="Switch to English">EN</button>
       <button id="refresh" class="icon-button" type="button" data-i18n-aria="refresh.label" data-i18n-title="refresh.label" aria-label="刷新额度" title="刷新额度">↻</button>
     </header>
 
-    <section class="summary" aria-live="polite">
-      <span class="summary-dot"></span>
-      <span id="summary-text" data-i18n="summary.loading">正在读取账户…</span>
-    </section>
+    <nav class="tab-bar" role="tablist">
+      <button id="tab-accounts" class="tab-button active" type="button" role="tab" aria-selected="true" data-i18n="tab.accounts">账户</button>
+      <button id="tab-projects" class="tab-button" type="button" role="tab" aria-selected="false" data-i18n="tab.projects">项目</button>
+    </nav>
 
-    <section class="grouped-card">
-      <div id="account-list" class="account-list"></div>
-      <div id="empty-state" class="empty-state" hidden>
-        <div class="empty-icon" aria-hidden="true">◎</div>
-        <strong data-i18n="empty.title">还没有配置账户</strong>
-        <p data-i18n="empty.desc">可在这里启动官方 agy 登录，或把已保存的账户加入名单。</p>
-      </div>
-    </section>
+    <div id="view-accounts" class="tab-view">
+      <section class="summary" aria-live="polite">
+        <span class="summary-dot"></span>
+        <span id="summary-text" data-i18n="summary.loading">正在读取账户…</span>
+      </section>
 
-    <section class="grouped-card onboarding-card">
-      <form id="add-form" class="add-form">
-        <div class="input-row">
-          <input id="email-input" name="email" type="email" autocomplete="email" data-i18n-placeholder="add.placeholder" placeholder="name@example.com" required>
-          <button id="add-button" class="primary-button" type="submit" data-i18n="add.button">添加</button>
+      <section class="grouped-card">
+        <div id="account-list" class="account-list"></div>
+        <div id="empty-state" class="empty-state" hidden>
+          <div class="empty-icon" aria-hidden="true">◎</div>
+          <strong data-i18n="empty.title">还没有配置账户</strong>
+          <p data-i18n="empty.desc">可在这里启动官方 agy 登录，或把已保存的账户加入名单。</p>
         </div>
-      </form>
-      <div class="oauth-section">
-        <button id="oauth-start" class="secondary-button" type="button" data-i18n="oauth.start">使用官方 agy 登录新账户</button>
-        <div id="oauth-panel" class="oauth-panel" hidden>
-          <p id="oauth-message" class="oauth-message" aria-live="polite"></p>
-          <a id="oauth-link" class="oauth-link" href="#" target="_blank" rel="noreferrer" hidden data-i18n="oauth.openLink">在浏览器中打开 Google 登录</a>
-          <form id="oauth-code-form" class="oauth-code-form" hidden>
-            <label for="oauth-code" data-i18n="oauth.codeLabel">粘贴 Google 授权码</label>
-            <div class="input-row">
-              <input id="oauth-code" name="code" type="text" autocomplete="one-time-code" maxlength="2048" data-i18n-placeholder="oauth.codePlaceholder" placeholder="授权码" required>
-              <button id="oauth-submit" class="primary-button" type="submit" data-i18n="oauth.submit">提交</button>
-            </div>
-          </form>
-          <button id="oauth-cancel" class="cancel-button" type="button" hidden data-i18n="oauth.cancel">取消登录</button>
+      </section>
+
+      <section class="grouped-card onboarding-card">
+        <form id="add-form" class="add-form">
+          <div class="input-row">
+            <input id="email-input" name="email" type="email" autocomplete="email" data-i18n-placeholder="add.placeholder" placeholder="name@example.com" required>
+            <button id="add-button" class="primary-button" type="submit" data-i18n="add.button">添加</button>
+          </div>
+        </form>
+        <div class="oauth-section">
+          <button id="oauth-start" class="secondary-button" type="button" data-i18n="oauth.start">使用官方 agy 登录新账户</button>
+          <div id="oauth-panel" class="oauth-panel" hidden>
+            <p id="oauth-message" class="oauth-message" aria-live="polite"></p>
+            <a id="oauth-link" class="oauth-link" href="#" target="_blank" rel="noreferrer" hidden data-i18n="oauth.openLink">在浏览器中打开 Google 登录</a>
+            <form id="oauth-code-form" class="oauth-code-form" hidden>
+              <label for="oauth-code" data-i18n="oauth.codeLabel">粘贴 Google 授权码</label>
+              <div class="input-row">
+                <input id="oauth-code" name="code" type="text" autocomplete="one-time-code" maxlength="2048" data-i18n-placeholder="oauth.codePlaceholder" placeholder="授权码" required>
+                <button id="oauth-submit" class="primary-button" type="submit" data-i18n="oauth.submit">提交</button>
+              </div>
+            </form>
+            <button id="oauth-cancel" class="cancel-button" type="button" hidden data-i18n="oauth.cancel">取消登录</button>
+          </div>
         </div>
+      </section>
+    </div>
+
+    <div id="view-projects" class="tab-view" hidden>
+      <div id="project-list" class="project-list"></div>
+      <div id="project-empty" class="empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true">⌘</div>
+        <strong data-i18n="projects.emptyTitle">暂无项目记录</strong>
+        <p data-i18n="projects.emptyDesc">使用官方 agy 在项目目录运行对话后，这里会自动展示上下文与 Token 统计。</p>
       </div>
-    </section>
+    </div>
 
     <footer class="footer">
       <span class="footer-note" data-i18n="footer.note">账户与自动轮换设置会与现有 CLI 共用。</span>

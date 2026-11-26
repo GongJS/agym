@@ -13,6 +13,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as projects$0 from "../projects/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
 /**
@@ -54,12 +58,22 @@ export function ListAccounts() {
 }
 
 /**
+ * ListProjects returns recent agy workspaces with context window and token statistics.
+ * @returns {$CancellablePromise<projects$0.ProjectView[]>}
+ */
+export function ListProjects() {
+    return $Call.ByID(2761728970).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
+/**
  * OAuthStatus returns the latest safe progress snapshot.
  * @returns {$CancellablePromise<$models.OAuthStatusView>}
  */
 export function OAuthStatus() {
     return $Call.ByID(1396303233).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType4($result);
     }));
 }
 
@@ -80,6 +94,15 @@ export function RefreshQuotas() {
  */
 export function RemoveAccount(email) {
     return $Call.ByID(2184187671, email);
+}
+
+/**
+ * RemoveProject hides a workspace from the project list until new agy activity occurs.
+ * @param {string} workspace
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveProject(workspace) {
+    return $Call.ByID(4054686077, workspace);
 }
 
 /**
@@ -105,7 +128,7 @@ export function Shutdown() {
  */
 export function StartOAuth() {
     return $Call.ByID(817228163).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType4($result);
     }));
 }
 
@@ -130,4 +153,6 @@ export function SwitchAccount(email) {
 // Private type creation functions
 const $$createType0 = $models.AccountView.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $models.OAuthStatusView.createFrom;
+const $$createType2 = projects$0.ProjectView.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = $models.OAuthStatusView.createFrom;

@@ -21,7 +21,6 @@ function collectElements(selectors) {
 const {
   list,
   emptyState,
-  count,
   summary,
   status,
   addForm,
@@ -37,10 +36,15 @@ const {
   oauthCode,
   oauthSubmit,
   oauthCancel,
+  tabAccounts,
+  tabProjects,
+  viewAccounts,
+  viewProjects,
+  projectList,
+  projectEmpty,
 } = collectElements({
   list: "#account-list",
   emptyState: "#empty-state",
-  count: "#account-count",
   summary: "#summary-text",
   status: "#status",
   addForm: "#add-form",
@@ -56,7 +60,19 @@ const {
   oauthCode: "#oauth-code",
   oauthSubmit: "#oauth-submit",
   oauthCancel: "#oauth-cancel",
+  tabAccounts: "#tab-accounts",
+  tabProjects: "#tab-projects",
+  viewAccounts: "#view-accounts",
+  viewProjects: "#view-projects",
+  projectList: "#project-list",
+  projectEmpty: "#project-empty",
 });
+
+let currentTab = "accounts";
+let latestProjects = [];
+const expandedProjects = new Set();
+let hasInitializedProjectsExpand = false;
+let projectPollTimer = null;
 
 let oauthAttemptID = "";
 let oauthPollTimer = null;
@@ -131,6 +147,7 @@ function rerenderCurrentView() {
     setStatusRaw(latestStatus.raw, latestStatus.isError);
   }
   renderAccountList(latestAccounts);
+  renderProjectList(latestProjects);
   if (latestOAuthView) {
     renderOAuthStatus(latestOAuthView);
   }
@@ -597,7 +614,6 @@ function renderAccountList(accounts) {
     if (active) expandedEmails.add(active.email);
   }
   list.replaceChildren(...accounts.map(renderAccount));
-  count.textContent = String(accounts.length);
   emptyState.hidden = accounts.length !== 0;
 }
 
@@ -671,7 +687,276 @@ async function reloadAndRefreshQuotas() {
   await refreshQuotas();
 }
 
-refreshButton.addEventListener("click", refreshQuotas);
+refreshButton.addEventListener("click", () => {
+  if (currentTab === "projects") {
+    void loadProjects(true);
+  } else {
+    void refreshQuotas();
+  }
+});
+
+function formatTokens(num) {
+  const n = Number(num || 0);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function renderProjectCard(project) {
+  const isExpanded = expandedProjects.has(project.path);
+  const card = document.createElement("article");
+  card.className = `project-card${project.active ? " is-active" : ""}${isExpanded ? " expanded" : ""}`;
+
+  const header = document.createElement("div");
+  header.className = "project-header";
+
+  const top = document.createElement("div");
+  top.className = "project-top";
+  const dot = document.createElement("span");
+  dot.className = "project-dot";
+  dot.title = project.active ? t("projects.running") : t("projects.idle");
+
+  const name = document.createElement("div");
+  name.className = "project-name";
+  name.textContent = project.name;
+  name.title = project.name;
+
+  const modelPill = document.createElement("span");
+  modelPill.className = "model-pill";
+  modelPill.textContent = project.model || (project.active ? t("projects.running") : t("projects.idle"));
+  modelPill.title = modelPill.textContent;
+
+  const chevronBtn = document.createElement("button");
+  chevronBtn.className = "chevron-btn";
+  chevronBtn.type = "button";
+  chevronBtn.setAttribute("aria-expanded", String(isExpanded));
+  const chevronIcon = document.createElement("span");
+  chevronIcon.className = "chevron-icon";
+  chevronIcon.textContent = "›";
+  chevronBtn.append(chevronIcon);
+
+  top.append(dot, name, modelPill, chevronBtn);
+
+  const pathEl = document.createElement("div");
+  pathEl.className = "project-path";
+  pathEl.textContent = project.path;
+  pathEl.title = project.path;
+  pathEl.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(project.path);
+      setStatusKey("projects.copied", { path: project.name });
+    } catch {
+      // Ignore clipboard failure in restricted context.
+    }
+  });
+
+  header.append(top, pathEl);
+
+  const detailsWrap = document.createElement("div");
+  detailsWrap.className = "project-details-wrap";
+  const detailsInner = document.createElement("div");
+  detailsInner.className = "card-details-inner";
+
+  const box = document.createElement("div");
+  box.className = "context-box";
+
+  const limit = Math.max(1, project.contextLimit || 1_000_000);
+  const freshInput = Math.max(0, project.latestInput || 0);
+  const cacheRead = Math.max(0, project.latestCacheRead || 0);
+  const latestOutput = Math.max(0, project.latestOutput || 0);
+  const contextUsed = freshInput + cacheRead;
+  const freeTokens = Math.max(0, limit - contextUsed);
+  const pctNum = Math.min(100, (contextUsed / limit) * 100);
+  const formatPct = (val) => `${Math.min(100, (Math.max(0, val) / limit) * 100).toFixed(1)}%`;
+
+  const ctxHead = document.createElement("div");
+  ctxHead.className = "context-head";
+  const hero = document.createElement("div");
+  hero.className = "context-hero";
+  const numEl = document.createElement("span");
+  numEl.className = "context-num";
+  numEl.textContent = formatTokens(contextUsed);
+  const limitEl = document.createElement("span");
+  limitEl.className = "context-limit";
+  limitEl.textContent = `/ ${formatTokens(limit)}`;
+  const titleEl = document.createElement("span");
+  titleEl.className = "context-title";
+  titleEl.textContent = t("projects.contextWindow");
+  hero.append(numEl, limitEl, titleEl);
+
+  const pctBadge = document.createElement("span");
+  pctBadge.className = `context-pct${pctNum < 40 ? " ok" : pctNum >= 80 ? " high" : ""}`;
+  pctBadge.textContent = `${pctNum.toFixed(1)}%`;
+  ctxHead.append(hero, pctBadge);
+
+  // 80 个点阵单元（20x4），非零项至少保留 1 格以便区分颜色
+  const totalCells = 80;
+  const freshCells = Math.min(totalCells, freshInput > 0 ? Math.max(1, Math.round((freshInput / limit) * totalCells)) : 0);
+  const cacheCells = Math.min(totalCells - freshCells, cacheRead > 0 ? Math.max(1, Math.round((cacheRead / limit) * totalCells)) : 0);
+  const outCells = Math.min(totalCells - freshCells - cacheCells, latestOutput > 0 ? Math.max(1, Math.round((latestOutput / limit) * totalCells)) : 0);
+
+  const matrix = document.createElement("div");
+  matrix.className = "dot-matrix";
+  for (let i = 0; i < totalCells; i++) {
+    const cell = document.createElement("span");
+    let cls = "matrix-cell";
+    if (i < freshCells) cls += " fresh";
+    else if (i < freshCells + cacheCells) cls += " cache";
+    else if (i < freshCells + cacheCells + outCells) cls += " output";
+    cell.className = cls;
+    matrix.append(cell);
+  }
+
+  const legend = document.createElement("div");
+  legend.className = "ctx-legend";
+  const legendItems = [
+    { cls: "fresh", label: t("projects.legend.input"), val: `${formatTokens(freshInput)} (${formatPct(freshInput)})` },
+    { cls: "cache", label: t("projects.legend.cache"), val: `${formatTokens(cacheRead)} (${formatPct(cacheRead)})` },
+    { cls: "output", label: t("projects.legend.output"), val: `${formatTokens(latestOutput)} (${formatPct(latestOutput)})` },
+    { cls: "free", label: t("projects.legend.free"), val: `${formatTokens(freeTokens)} (${formatPct(freeTokens)})` },
+  ];
+  for (const item of legendItems) {
+    const r = document.createElement("div");
+    r.className = "ctx-row";
+    const left = document.createElement("span");
+    left.className = "ctx-label";
+    const sw = document.createElement("span");
+    sw.className = `ctx-swatch ${item.cls}`;
+    left.append(sw, document.createTextNode(item.label));
+    const val = document.createElement("span");
+    val.className = "ctx-val";
+    val.textContent = item.val;
+    r.append(left, val);
+    legend.append(r);
+  }
+
+  const foot = document.createElement("div");
+  foot.className = "context-foot";
+  const totalTokens = (project.totalInput || 0) + (project.totalCacheRead || 0) + (project.totalOutput || 0);
+  const footLeft = document.createElement("span");
+  footLeft.textContent = t("projects.footer", { steps: project.stepCount || 0, total: formatTokens(totalTokens) });
+  const footRight = document.createElement("span");
+  footRight.className = "context-foot-right";
+  const statusText = document.createElement("span");
+  statusText.textContent = project.active ? t("projects.running") : t("projects.idle");
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "project-remove-btn";
+  removeBtn.textContent = t("projects.remove");
+  removeBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    removeBtn.disabled = true;
+    try {
+      await Accounts.RemoveProject(project.path);
+      expandedProjects.delete(project.path);
+      renderProjectList(latestProjects.filter((p) => p.path !== project.path));
+    } catch (error) {
+      removeBtn.disabled = false;
+      setStatusRaw(error?.message ?? String(error), true);
+    }
+  });
+  footRight.append(statusText, removeBtn);
+  foot.append(footLeft, footRight);
+
+  box.append(ctxHead, matrix, legend, foot);
+  detailsInner.append(box);
+  detailsWrap.append(detailsInner);
+
+  const toggleProject = () => {
+    const next = !card.classList.contains("expanded");
+    card.classList.toggle("expanded", next);
+    chevronBtn.setAttribute("aria-expanded", String(next));
+    if (next) expandedProjects.add(project.path);
+    else expandedProjects.delete(project.path);
+  };
+  header.addEventListener("click", toggleProject);
+  chevronBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleProject();
+  });
+
+  card.append(header, detailsWrap);
+  return card;
+}
+
+function renderProjectList(projects) {
+  latestProjects = projects;
+  if (!hasInitializedProjectsExpand && projects.length > 0) {
+    hasInitializedProjectsExpand = true;
+    const active = projects.find((p) => p.active) ?? projects[0];
+    if (active) expandedProjects.add(active.path);
+  }
+  projectList.replaceChildren(...projects.map(renderProjectCard));
+  projectEmpty.hidden = projects.length !== 0;
+}
+
+async function loadProjects(showStatus = false) {
+  try {
+    const projects = await Accounts.ListProjects();
+    renderProjectList(projects);
+    if (showStatus) setStatusKey("projects.refreshed");
+  } catch (error) {
+    renderProjectList([]);
+    setStatusRaw(error?.message ?? String(error), true);
+  }
+}
+
+async function pollProjects() {
+  if (latestProjects.length === 0) return;
+  try {
+    const fresh = await Accounts.ListProjects();
+    const byPath = new Map(fresh.map((p) => [p.path, p]));
+    const updated = latestProjects.map((p) => byPath.get(p.path) ?? p);
+    renderProjectList(updated);
+  } catch {
+    // 轮询失败时保留当前列表，避免界面闪烁
+  }
+}
+
+function stopProjectPolling() {
+  if (projectPollTimer) {
+    clearInterval(projectPollTimer);
+    projectPollTimer = null;
+  }
+}
+
+function startProjectPolling() {
+  stopProjectPolling();
+  projectPollTimer = setInterval(() => {
+    if (currentTab === "projects" && document.visibilityState === "visible") {
+      void pollProjects();
+    }
+  }, 5000);
+}
+
+window.addEventListener("blur", stopProjectPolling);
+window.addEventListener("focus", () => {
+  if (currentTab === "projects") {
+    void loadProjects(false);
+    startProjectPolling();
+  }
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  const isProjects = tab === "projects";
+  tabAccounts.classList.toggle("active", !isProjects);
+  tabProjects.classList.toggle("active", isProjects);
+  tabAccounts.setAttribute("aria-selected", String(!isProjects));
+  tabProjects.setAttribute("aria-selected", String(isProjects));
+  viewAccounts.hidden = isProjects;
+  viewProjects.hidden = !isProjects;
+  if (isProjects) {
+    void loadProjects(false);
+    startProjectPolling();
+  } else {
+    stopProjectPolling();
+  }
+}
+
+tabAccounts.addEventListener("click", () => switchTab("accounts"));
+tabProjects.addEventListener("click", () => switchTab("projects"));
 langToggle.addEventListener("click", () => {
   toggleLang();
   rerenderCurrentView();

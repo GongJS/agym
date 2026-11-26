@@ -77,12 +77,6 @@ button { cursor: pointer; }
 .heading { flex: 1; min-width: 0; }
 h1, p { margin: 0; }
 h1 { font-size: 13.5px; font-weight: 660; letter-spacing: -.15px; }
-.count {
-  min-width: 19px; height: 19px; padding: 0 6px; border-radius: 999px;
-  background: var(--soft); color: var(--muted); font-size: 10px; font-weight: 600;
-  border: 1px solid var(--line);
-  display: grid; place-items: center;
-}
 .icon-button, .icon-pill {
   height: 25px; border: 1px solid var(--line); border-radius: 7px; background: var(--soft);
   color: var(--muted); line-height: 1;
@@ -100,6 +94,269 @@ h1 { font-size: 13.5px; font-weight: 660; letter-spacing: -.15px; }
 .summary-dot {
   width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%;
   background: var(--ok); box-shadow: 0 0 8px var(--ok-glow);
+}
+
+/* 顶部 Tab 切换器 */
+.tab-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+}
+.tab-button {
+  height: 25px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.tab-button:hover { color: var(--fg); }
+.tab-button.active {
+  background: var(--pill-bg);
+  color: var(--fg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+
+.tab-view {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 项目视图与 Context Window 点阵卡片 */
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 455px;
+  overflow-y: auto;
+  padding: 1px;
+}
+.project-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 10px 11px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.project-card.is-active {
+  border-color: rgba(59, 110, 246, .55);
+  box-shadow: 0 0 0 1px rgba(59, 110, 246, .16), inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.project-header {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+.project-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.project-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 7px;
+  background: var(--muted);
+  opacity: .55;
+}
+.project-card.is-active .project-dot {
+  background: var(--ok);
+  opacity: 1;
+  box-shadow: 0 0 8px var(--ok-glow);
+}
+.project-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 660;
+}
+.model-pill {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 560;
+}
+.project-path {
+  padding-left: 14px;
+  font-size: 9.2px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: copy;
+}
+.project-path:hover { color: var(--fg); }
+
+.project-details-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows .26s cubic-bezier(.22, 1, .36, 1), opacity .22s ease;
+}
+.project-card.expanded .project-details-wrap {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.project-card.expanded .chevron-icon { transform: rotate(90deg); }
+
+.context-box {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--card-inner);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.context-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.context-title {
+  font-size: 10px;
+  font-weight: 620;
+  color: var(--muted);
+}
+.context-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.context-num {
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -.4px;
+  font-variant-numeric: tabular-nums;
+}
+.context-limit {
+  font-size: 11px;
+  font-weight: 560;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.context-pct {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(251, 191, 36, .18);
+  color: var(--warn);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.context-pct.ok { background: var(--accent-soft); color: var(--accent); }
+.context-pct.high { background: rgba(248, 113, 113, .20); color: var(--danger); }
+
+.dot-matrix {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 3px;
+}
+.matrix-cell {
+  aspect-ratio: 1;
+  border-radius: 2.5px;
+  background: var(--track);
+}
+.matrix-cell.fresh { background: #8bb4ff; }
+.matrix-cell.cache { background: #c5a3ff; }
+.matrix-cell.output { background: #6ee7b7; }
+
+.ctx-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ctx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9.8px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.ctx-row.clickable { cursor: pointer; }
+.ctx-row.clickable:hover { background: var(--soft); }
+.ctx-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.ctx-swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: 0 0 7px;
+}
+.ctx-swatch.fresh { background: #8bb4ff; }
+.ctx-swatch.cache { background: #c5a3ff; }
+.ctx-swatch.output { background: #6ee7b7; }
+.ctx-swatch.free { background: var(--track); }
+.ctx-val {
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.context-foot {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9.2px;
+  color: var(--muted);
+}
+.context-foot-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.project-remove-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9.2px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color .14s ease, background-color .14s ease;
+}
+.project-remove-btn:hover {
+  color: var(--danger);
+  background: rgba(248, 113, 113, .12);
+}
+.project-remove-btn:disabled {
+  opacity: .5;
+  cursor: default;
 }
 
 /* 账户卡片容器改为透明列表，每张账户独立成毛玻璃卡片 */

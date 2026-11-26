@@ -10,6 +10,7 @@ import (
 
 	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/catalog"
+	"github.com/gongjs/agym/internal/projects"
 	"github.com/gongjs/agym/internal/usage"
 )
 
@@ -62,6 +63,16 @@ func NewAccounts(roster *accounts.Roster) *Accounts {
 
 func (s *Accounts) ListAccounts() ([]AccountView, error) {
 	return s.accountViews(context.Background(), false)
+}
+
+// ListProjects returns recent agy workspaces with context window and token statistics.
+func (s *Accounts) ListProjects() ([]projects.ProjectView, error) {
+	return projects.ListProjects("")
+}
+
+// RemoveProject hides a workspace from the project list until new agy activity occurs.
+func (s *Accounts) RemoveProject(workspace string) error {
+	return projects.DismissProject("", workspace)
 }
 
 // RefreshQuotas performs a force refresh for each configured account and then
