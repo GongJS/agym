@@ -47,6 +47,9 @@ func Run(assets embed.FS) error {
 			ActivationPolicy: application.ActivationPolicyAccessory,
 		},
 	})
+	accountService.SetOnQuotasUpdated(func() {
+		app.Event.Emit("accounts:updated")
+	})
 
 	tray := app.SystemTray.New()
 	if runtime.GOOS == "darwin" {

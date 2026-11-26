@@ -78,8 +78,18 @@ export function OAuthStatus() {
 }
 
 /**
- * RefreshQuotas performs a force refresh for each configured account and then
- * returns the same roster projection used by ListAccounts.
+ * RefreshCurrentQuota performs a force refresh only for the currently active account.
+ * @returns {$CancellablePromise<$models.AccountView[]>}
+ */
+export function RefreshCurrentQuota() {
+    return $Call.ByID(2115295676).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * RefreshQuotas performs a force refresh for the current account first and then
+ * refreshes remaining accounts asynchronously in the background.
  * @returns {$CancellablePromise<$models.AccountView[]>}
  */
 export function RefreshQuotas() {
@@ -106,6 +116,15 @@ export function RemoveProject(workspace) {
 }
 
 /**
+ * SetOnQuotasUpdated registers a callback invoked when background quota refreshes complete.
+ * @param {any} fn
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetOnQuotasUpdated(fn) {
+    return $Call.ByID(2692008323, fn);
+}
+
+/**
  * @param {string} email
  * @param {boolean} enabled
  * @returns {$CancellablePromise<void>}
@@ -115,7 +134,7 @@ export function SetRotation(email, enabled) {
 }
 
 /**
- * Shutdown cancels an active OAuth attempt before the tray process exits.
+ * Shutdown cancels an active OAuth attempt and any background quota refresh before the tray process exits.
  * @returns {$CancellablePromise<void>}
  */
 export function Shutdown() {

@@ -433,6 +433,7 @@ function renderAccount(account) {
       setStatusKey("status.switched", { email: account.email });
       expandedEmails.add(account.email);
       await loadAccounts();
+      void refreshCurrentAccountQuota();
     } catch (error) {
       setStatusRaw(error?.message ?? String(error), true);
       await loadAccounts();
@@ -663,6 +664,22 @@ addForm.addEventListener("submit", async (event) => {
     addButton.disabled = false;
   }
 });
+
+let currentQuotaRefreshing = false;
+
+async function refreshCurrentAccountQuota() {
+  if (currentQuotaRefreshing || refreshButton.disabled) return;
+  currentQuotaRefreshing = true;
+  try {
+    const accounts = await Accounts.RefreshCurrentQuota();
+    renderAccountList(accounts);
+    updateSummaryFromAccounts(accounts);
+  } catch {
+    // 静默回退到当前缓存，不打断切换操作
+  } finally {
+    currentQuotaRefreshing = false;
+  }
+}
 
 async function refreshQuotas() {
   if (refreshButton.disabled) return;
@@ -939,6 +956,7 @@ window.addEventListener("focus", () => {
 });
 
 function switchTab(tab) {
+  const prevTab = currentTab;
   currentTab = tab;
   const isProjects = tab === "projects";
   tabAccounts.classList.toggle("active", !isProjects);
@@ -952,6 +970,9 @@ function switchTab(tab) {
     startProjectPolling();
   } else {
     stopProjectPolling();
+    if (prevTab !== "accounts") {
+      void refreshCurrentAccountQuota();
+    }
   }
 }
 
@@ -1057,6 +1078,10 @@ oauthCancel.addEventListener("click", async () => {
   } finally {
     oauthCancel.disabled = false;
   }
+});
+
+window.wails?.Events?.On?.("accounts:updated", () => {
+  void loadAccounts();
 });
 
 applyStaticTranslations();

@@ -49,6 +49,18 @@ type Accounts struct {
 	oauthView OAuthStatusView
 	oauthCmds chan accounts.OAuthCommand
 	oauthStop context.CancelFunc
+
+	refreshMu       sync.Mutex
+	bgMu            sync.Mutex
+	bgCancel        context.CancelFunc
+	onQuotasUpdated func()
+}
+
+// SetOnQuotasUpdated registers a callback invoked when background quota refreshes complete.
+func (s *Accounts) SetOnQuotasUpdated(fn func()) {
+	s.bgMu.Lock()
+	s.onQuotasUpdated = fn
+	s.bgMu.Unlock()
 }
 
 func NewAccounts(roster *accounts.Roster) *Accounts {
@@ -75,10 +87,15 @@ func (s *Accounts) RemoveProject(workspace string) error {
 	return projects.DismissProject("", workspace)
 }
 
-// RefreshQuotas performs a force refresh for each configured account and then
-// returns the same roster projection used by ListAccounts.
+// RefreshQuotas performs a force refresh for the current account first and then
+// refreshes remaining accounts asynchronously in the background.
 func (s *Accounts) RefreshQuotas() ([]AccountView, error) {
-	return s.accountViews(context.Background(), true)
+	return s.refreshQuotas(context.Background(), true)
+}
+
+// RefreshCurrentQuota performs a force refresh only for the currently active account.
+func (s *Accounts) RefreshCurrentQuota() ([]AccountView, error) {
+	return s.refreshQuotas(context.Background(), false)
 }
 
 func (s *Accounts) SwitchAccount(email string) error {
@@ -198,11 +215,12 @@ func (s *Accounts) CancelOAuth(attemptID string) error {
 	return nil
 }
 
-// Shutdown cancels an active OAuth attempt before the tray process exits.
+// Shutdown cancels an active OAuth attempt and any background quota refresh before the tray process exits.
 func (s *Accounts) Shutdown() {
 	if s == nil {
 		return
 	}
+	s.cancelBackgroundRefresh()
 	s.oauthMu.Lock()
 	if s.oauthStop != nil {
 		s.oauthStop()
@@ -237,24 +255,93 @@ func (s *Accounts) SetRotation(email string, enabled bool) error {
 }
 
 func (s *Accounts) accountViews(ctx context.Context, refresh bool) ([]AccountView, error) {
-	if s.roster == nil || s.refresher == nil {
-		return nil, fmt.Errorf("account service is not initialized")
-	}
-	items, err := s.roster.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	emails := make([]string, len(items))
-	for i, item := range items {
-		emails[i] = item.Email
-	}
-	cache := usage.LoadCache(s.cachePath)
-	if refresh {
-		cache, err = s.refresher.Refresh(ctx, emails, true)
+	if !refresh {
+		if s.roster == nil || s.refresher == nil {
+			return nil, fmt.Errorf("account service is not initialized")
+		}
+		items, err := s.roster.List(ctx)
 		if err != nil {
 			return nil, err
 		}
+		return s.buildAccountViews(items, usage.LoadCache(s.cachePath)), nil
 	}
+	return s.refreshQuotas(ctx, true)
+}
+
+func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]AccountView, error) {
+	if s.roster == nil || s.refresher == nil {
+		return nil, fmt.Errorf("account service is not initialized")
+	}
+
+	s.cancelBackgroundRefresh()
+	s.refreshMu.Lock()
+	items, err := s.roster.List(ctx)
+	if err != nil {
+		s.refreshMu.Unlock()
+		return nil, err
+	}
+	var current, others []string
+	for _, item := range items {
+		if item.Current {
+			current = append(current, item.Email)
+		} else {
+			others = append(others, item.Email)
+		}
+	}
+
+	var cache *usage.Cache
+	if len(current) > 0 {
+		cache, err = s.refresher.Refresh(ctx, current, true)
+	} else if includeOthers {
+		cache, err = s.refresher.Refresh(ctx, others, true)
+		others = nil
+	} else {
+		cache = usage.LoadCache(s.cachePath)
+		others = nil
+	}
+	s.refreshMu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if includeOthers && len(others) > 0 {
+		s.startBackgroundRefresh(others)
+	}
+	return s.buildAccountViews(items, cache), nil
+}
+
+func (s *Accounts) cancelBackgroundRefresh() {
+	s.bgMu.Lock()
+	if s.bgCancel != nil {
+		s.bgCancel()
+		s.bgCancel = nil
+	}
+	s.bgMu.Unlock()
+}
+
+func (s *Accounts) startBackgroundRefresh(emails []string) {
+	bgCtx, cancel := context.WithCancel(context.Background())
+	s.bgMu.Lock()
+	if s.bgCancel != nil {
+		s.bgCancel()
+	}
+	s.bgCancel = cancel
+	cb := s.onQuotasUpdated
+	s.bgMu.Unlock()
+
+	go func() {
+		defer cancel()
+		s.refreshMu.Lock()
+		if bgCtx.Err() == nil {
+			_, _ = s.refresher.Refresh(bgCtx, emails, true)
+		}
+		s.refreshMu.Unlock()
+		if bgCtx.Err() == nil && cb != nil {
+			cb()
+		}
+	}()
+}
+
+func (s *Accounts) buildAccountViews(items []accounts.Account, cache *usage.Cache) []AccountView {
 	modelCatalog := catalog.Load(s.refresher.CatalogPath)
 	views := make([]AccountView, 0, len(items))
 	for _, item := range items {
@@ -275,5 +362,5 @@ func (s *Accounts) accountViews(ctx context.Context, refresh bool) ([]AccountVie
 		}
 		views = append(views, view)
 	}
-	return views, nil
+	return views
 }
