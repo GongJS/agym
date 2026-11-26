@@ -149,7 +149,7 @@ func (s *uiState) view(c *ui.Context) {
 	statusErr := s.statusErr
 	s.mu.Unlock()
 
-	ui.Column(c).Fill().Padding(12).Gap(10).Background(p.bg).Children(func() {
+	ui.Column(c).FillWidth().Padding(12).Gap(10).Background(p.bg).Children(func() {
 		// Header
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Box(c).Width(24).Height(24).Radius(7).Background(p.accent).Center().Children(func() {
@@ -200,11 +200,11 @@ func (s *uiState) view(c *ui.Context) {
 		})
 
 		if tabIdx == 0 {
-			ui.Column(c).FillWidth().Grow(1).Gap(8).Children(func() {
+			ui.Column(c).FillWidth().Gap(8).Children(func() {
 				s.renderAccountsTab(c, p, accountsCopy)
 			})
 		} else {
-			ui.Column(c).FillWidth().Grow(1).Gap(8).Children(func() {
+			ui.Column(c).FillWidth().Gap(8).Children(func() {
 				s.renderProjectsTab(c, p, projectsCopy)
 			})
 		}
@@ -244,7 +244,9 @@ func (s *uiState) switchTab(next int) {
 	s.mu.Unlock()
 
 	if next == 1 {
-		s.loadProjectsAsync(win, false)
+		if s.loadProjectsSyncIfNeeded() {
+			s.loadProjectsAsync(win, false)
+		}
 		if startPoll != nil {
 			startPoll()
 		}
@@ -272,13 +274,15 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 	}
 	ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine()
 
-	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
-		ui.Column(c).FillWidth().Gap(8).Children(func() {
-			for _, acc := range items {
-				s.renderAccountCard(c, p, acc)
-			}
+	if len(items) > 0 {
+		ui.Scroll(c).FillWidth().MaxHeight(380).Children(func() {
+			ui.Column(c).FillWidth().Gap(8).Children(func() {
+				for _, acc := range items {
+					s.renderAccountCard(c, p, acc)
+				}
+			})
 		})
-	})
+	}
 
 	s.renderOnboardingCard(c, p)
 }
@@ -524,23 +528,21 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 	s.mu.Unlock()
 
 	if loading {
-		ui.Column(c).FillWidth().Grow(1).Center().Children(func() {
+		ui.Column(c).FillWidth().Padding(32, 16).Center().Children(func() {
 			ui.Spinner(c)
 		})
 		return
 	}
 
 	if len(items) == 0 {
-		ui.Column(c).FillWidth().Grow(1).Center().Children(func() {
-			ui.Column(c).FillWidth().Padding(24, 16).Gap(6).Radius(12).Background(p.card).Border(1, p.line).Center().Children(func() {
-				ui.Text(c, s.tr("projects.emptyTitle")).FontSize(12).Bold().TextColor(p.fg)
-				ui.Text(c, s.tr("projects.emptyDesc")).FontSize(10).TextColor(p.muted)
-			})
+		ui.Column(c).FillWidth().Padding(24, 16).Gap(6).Radius(12).Background(p.card).Border(1, p.line).Center().Children(func() {
+			ui.Text(c, s.tr("projects.emptyTitle")).FontSize(12).Bold().TextColor(p.fg)
+			ui.Text(c, s.tr("projects.emptyDesc")).FontSize(10).TextColor(p.muted)
 		})
 		return
 	}
 
-	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
+	ui.Scroll(c).FillWidth().MaxHeight(500).Children(func() {
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			for _, proj := range items {
 				s.renderProjectCard(c, p, proj)

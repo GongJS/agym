@@ -96,12 +96,12 @@ func Run() error {
 		win = mygo.NewFlyout(mygo.FlyoutOptions{
 			Tray:       tray,
 			Width:      396,
-			Height:     580,
-			MinWidth:   380,
-			MaxWidth:   420,
-			MinHeight:  420,
+			Height:     320,
+			MinWidth:   396,
+			MaxWidth:   396,
+			MinHeight:  220,
 			MaxHeight:  680,
-			FitContent: false,
+			FitContent: true,
 			Focusable:  true,
 			Hidden:     true,
 			Popover:    true,
@@ -273,6 +273,30 @@ func (s *uiState) refreshCurrentAccountQuotaAsync(win *mygo.Window) {
 			s.triggerUpdate(win)
 		}
 	}()
+}
+
+func (s *uiState) loadProjectsSyncIfNeeded() bool {
+	if s.svc == nil {
+		return true
+	}
+	s.mu.Lock()
+	loaded := s.projectsLoaded
+	s.mu.Unlock()
+	if loaded {
+		return true
+	}
+	items, err := s.svc.ListProjects()
+	s.mu.Lock()
+	s.projectsLoading = false
+	s.projectsLoaded = true
+	if err != nil {
+		s.statusMsg = err.Error()
+		s.statusErr = true
+	} else {
+		s.applyProjectListLocked(items)
+	}
+	s.mu.Unlock()
+	return false
 }
 
 func (s *uiState) loadProjectsAsync(win *mygo.Window, showRefreshed bool) {
