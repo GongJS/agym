@@ -149,51 +149,157 @@ function quotaLabel(account) {
   return known.has(quota.status) ? t(`quota.status.${quota.status}`) : t("quota.status.unknown");
 }
 
+function formatResetCountdown(bucket) {
+  if (!bucket) return "";
+  if (bucket.reset) {
+    const ms = Date.parse(bucket.reset);
+    if (!Number.isNaN(ms)) {
+      const diffMs = ms - Date.now();
+      if (diffMs <= 0) return t("quota.resetsSoon");
+      const totalMins = Math.floor(diffMs / 60000);
+      const hours = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      if (bucket.percent >= 100 && hours >= 24) {
+        return t("quota.available");
+      }
+      return t("quota.refreshesIn", { time: `${hours}h ${mins}m` });
+    }
+  }
+  return bucket.percent <= 0 ? t("quota.exhausted") : t("quota.available");
+}
+
+function tierClassForPercent(percent) {
+  if (percent < 20) return "low";
+  if (percent < 50) return "warn";
+  return "";
+}
+
+function renderQuotaWindow(labelKey, bucket) {
+  const pct = Math.max(0, Math.min(100, bucket.percent));
+  const tierClass = tierClassForPercent(pct);
+
+  const wrap = document.createElement("div");
+  wrap.className = "quota-window";
+  if (bucket.reset) wrap.title = t("quota.reset", { reset: bucket.reset });
+
+  const top = document.createElement("div");
+  top.className = "quota-window-top";
+  const label = document.createElement("span");
+  label.className = "quota-window-label";
+  label.textContent = t(labelKey);
+  const pctEl = document.createElement("span");
+  pctEl.className = "quota-window-pct";
+  pctEl.textContent = `${pct}%`;
+  top.append(label, pctEl);
+
+  const track = document.createElement("div");
+  track.className = "quota-bar-track";
+  const fill = document.createElement("div");
+  fill.className = `quota-bar-fill ${tierClass}`.trim();
+  fill.style.width = `${pct}%`;
+  track.append(fill);
+
+  const reset = document.createElement("div");
+  reset.className = `quota-window-reset ${tierClass}`.trim();
+  reset.textContent = formatResetCountdown(bucket);
+
+  wrap.append(top, track, reset);
+  return wrap;
+}
+
 function renderQuota(account, container) {
   const quota = account.quota;
-  const row = document.createElement("div");
-  row.className = "quota-row";
+  const panel = document.createElement("div");
+  panel.className = "quota-panel";
   if (!quota) {
+    const row = document.createElement("div");
+    row.className = "quota-status-row";
     row.append(makeBadge(t("quota.unfetched"), "muted"));
-    container.append(row);
+    panel.append(row);
+    container.append(panel);
     return;
   }
-  const bucketKeys = ["gw", "g5", "cw", "c5"];
-  let shown = 0;
-  for (const key of bucketKeys) {
-    const bucket = quota.buckets?.[key];
-    if (!bucket || bucket.percent < 0) continue;
-    row.append(
-      makeBadge(
-        `${t(`quota.bucket.${key}`)} ${bucket.percent}%`,
-        "quota",
-        bucket.reset ? t("quota.reset", { reset: bucket.reset }) : ""
-      )
-    );
-    shown += 1;
+
+  const groups = [
+    {
+      titleKey: "quota.group.gemini",
+      members: quota.members?.gemini,
+      windows: [
+        { key: "gw", labelKey: "quota.window.weekly" },
+        { key: "g5", labelKey: "quota.window.5h" },
+      ],
+    },
+    {
+      titleKey: "quota.group.claude",
+      members: quota.members?.claude,
+      windows: [
+        { key: "cw", labelKey: "quota.window.weekly" },
+        { key: "c5", labelKey: "quota.window.5h" },
+      ],
+    },
+  ];
+
+  let renderedGroups = 0;
+  for (const grp of groups) {
+    const activeWindows = grp.windows.filter(({ key }) => {
+      const b = quota.buckets?.[key];
+      return b && b.percent >= 0;
+    });
+    if (!activeWindows.length) continue;
+    renderedGroups += 1;
+
+    const card = document.createElement("div");
+    card.className = "quota-group";
+
+    const head = document.createElement("div");
+    head.className = "quota-group-head";
+    const title = document.createElement("div");
+    title.className = "quota-group-title";
+    title.textContent = t(grp.titleKey);
+    head.append(title);
+    if (grp.members?.length) {
+      const models = document.createElement("div");
+      models.className = "quota-group-models";
+      models.textContent = grp.members.join(", ");
+      models.title = models.textContent;
+      head.append(models);
+    }
+    card.append(head);
+
+    for (const { key, labelKey } of activeWindows) {
+      card.append(renderQuotaWindow(labelKey, quota.buckets[key]));
+    }
+    panel.append(card);
   }
-  if (!shown) {
-    row.append(
-      makeBadge(
-        quotaLabel(account),
-        quota.status === "error" || quota.status === "timeout" ? "missing" : "muted",
-        quota.error ?? ""
-      )
-    );
+
+  if (!renderedGroups || quota.status === "stale" || (quota.status === "ineligible" && quota.error?.startsWith("https://"))) {
+    const statusRow = document.createElement("div");
+    statusRow.className = "quota-status-row";
+    if (!renderedGroups) {
+      statusRow.append(
+        makeBadge(
+          quotaLabel(account),
+          quota.status === "error" || quota.status === "timeout" ? "missing" : "muted",
+          quota.error ?? ""
+        )
+      );
+    }
+    if (quota.status === "stale") {
+      statusRow.append(makeBadge(t("badge.stale"), "muted", quota.error ?? t("badge.staleTitle")));
+    }
+    if (quota.status === "ineligible" && quota.error?.startsWith("https://")) {
+      const verify = document.createElement("a");
+      verify.className = "verify-link";
+      verify.href = quota.error;
+      verify.target = "_blank";
+      verify.rel = "noreferrer";
+      verify.textContent = t("quota.verify");
+      statusRow.append(verify);
+    }
+    panel.append(statusRow);
   }
-  if (quota.status === "stale") {
-    row.append(makeBadge(t("badge.stale"), "muted", quota.error ?? t("badge.staleTitle")));
-  }
-  if (quota.status === "ineligible" && quota.error?.startsWith("https://")) {
-    const verify = document.createElement("a");
-    verify.className = "verify-link";
-    verify.href = quota.error;
-    verify.target = "_blank";
-    verify.rel = "noreferrer";
-    verify.textContent = t("quota.verify");
-    row.append(verify);
-  }
-  container.append(row);
+
+  container.append(panel);
 }
 
 function renderControlsRow(account, container) {
