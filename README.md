@@ -72,6 +72,19 @@ agym remove-hook              # Remove the agym Stop hook
 agym supervise [--pinned] [--] <agy args...>
 ```
 
+### Session Handoff (Optional)
+
+Daily menu bar tray usage and manual switching (`agym switch`) do **not** require installing any hook.
+
+If you want `agym supervise` to automatically rotate accounts when a terminal session hits a quota limit, register the Stop hook once:
+
+```sh
+agym install-hook
+agym supervise --model <model-id>
+```
+
+To remove the hook later, run `agym remove-hook`.
+
 ## Documentation
 
 - [Architecture & Security Model](./docs/architecture.md)

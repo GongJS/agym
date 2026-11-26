@@ -59,3 +59,4 @@ case ":${PATH:-}:" in
     ;;
 esac
 echo "Run 'agym' (or 'agym tray') to launch the menu bar app, or 'agym --help' for CLI usage."
+echo "Optional: run 'agym install-hook' only if you want automatic account handoff during 'agym supervise' sessions."

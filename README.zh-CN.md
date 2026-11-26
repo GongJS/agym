@@ -71,6 +71,19 @@ agym remove-hook              # 移除 agym Stop hook
 agym supervise [--pinned] [--] <agy args...>
 ```
 
+### 会话额度接力（可选）
+
+日常使用菜单栏托盘与手动切换账号（`agym switch`）**不需要**安装任何 hook。
+
+仅当你希望在终端中使用 `agym supervise` 启动会话，并在遇到配额耗尽时自动切号续跑，才需要执行一次：
+
+```sh
+agym install-hook
+agym supervise --model <model-id>
+```
+
+如需卸载该钩子，随时执行 `agym remove-hook` 即可。
+
 ## 相关文档
 
 - [架构设计与安全边界](./docs/architecture.md)
