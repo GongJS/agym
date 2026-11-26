@@ -8,9 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
+
+	"github.com/gongjs/agym/internal/proc"
 )
 
 func TestRunSessionHookStoresOnlySafeStopFields(t *testing.T) {
@@ -56,7 +57,7 @@ func TestRunSessionHookStoresOnlySafeStopFields(t *testing.T) {
 
 func TestStopProcessTreeTerminatesChildAndHelpers(t *testing.T) {
 	cmd := exec.Command("sh", "-c", "sleep 30 & wait")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	proc.ConfigureDetached(cmd)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

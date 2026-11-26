@@ -13,13 +13,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode"
 
 	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/catalog"
 	"github.com/gongjs/agym/internal/envutil"
+	"github.com/gongjs/agym/internal/proc"
 	"github.com/gongjs/agym/internal/usage"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -297,7 +297,7 @@ func superviseInteractive(agyBinary string, args []string, pinned bool, currentE
 	}
 
 	signals := make(chan os.Signal, 2)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	proc.NotifyShutdown(signals)
 	defer signal.Stop(signals)
 	ticker := time.NewTicker(sessionPollInterval)
 	defer ticker.Stop()
@@ -601,13 +601,7 @@ func processExitCode(err error) int {
 }
 
 func signalExitCode(sig os.Signal) int {
-	if sig == syscall.SIGTERM {
-		return 143
-	}
-	if sig == syscall.SIGHUP {
-		return 129
-	}
-	return 130
+	return proc.SignalExitCode(sig)
 }
 
 func safeConversationID(value string) string {
@@ -646,9 +640,9 @@ func stopProcessTree(cmd *exec.Cmd, wait <-chan error, stderr io.Writer) error {
 	pid := cmd.Process.Pid
 	descendants := processDescendants(pid)
 	for i := len(descendants) - 1; i >= 0; i-- {
-		_ = syscall.Kill(descendants[i], syscall.SIGTERM)
+		_ = proc.SignalPID(descendants[i], false)
 	}
-	_ = cmd.Process.Signal(syscall.SIGTERM)
+	_ = proc.SignalPID(pid, false)
 	select {
 	case <-wait:
 		terminatePIDs(descendants, 2*time.Second)
@@ -662,9 +656,9 @@ func stopProcessTree(cmd *exec.Cmd, wait <-chan error, stderr io.Writer) error {
 		}
 	}
 	for i := len(descendants) - 1; i >= 0; i-- {
-		_ = syscall.Kill(descendants[i], syscall.SIGKILL)
+		_ = proc.SignalPID(descendants[i], true)
 	}
-	_ = cmd.Process.Kill()
+	_ = proc.SignalPID(pid, true)
 	select {
 	case <-wait:
 		return nil
@@ -687,7 +681,7 @@ func terminatePIDs(pids []int, grace time.Duration) {
 	for time.Now().Before(deadline) {
 		alive := false
 		for _, pid := range pids {
-			if err := syscall.Kill(pid, 0); err == nil || errors.Is(err, syscall.EPERM) {
+			if proc.IsPIDAlive(pid) {
 				alive = true
 				break
 			}
@@ -698,7 +692,7 @@ func terminatePIDs(pids []int, grace time.Duration) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	for _, pid := range pids {
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		_ = proc.SignalPID(pid, true)
 	}
 }
 

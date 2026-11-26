@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/creack/pty"
+	"github.com/gongjs/agym/internal/envutil"
+	"github.com/gongjs/agym/internal/proc"
 )
 
 const (
@@ -74,10 +74,12 @@ type OAuthAdder struct {
 
 func NewOAuthAdder(roster *Roster) *OAuthAdder {
 	home, _ := os.UserHomeDir()
+	binary, _ := DefaultAgyBinary()
+	geminiDir, _ := DefaultQuotaDir()
 	return &OAuthAdder{
 		Roster:    roster,
-		Binary:    filepath.Join(home, ".local", "bin", "agy"),
-		GeminiDir: filepath.Join(home, "Library", "Application Support", "sparkle", "agy-quota"),
+		Binary:    binary,
+		GeminiDir: geminiDir,
 		OwnerFile: filepath.Join(home, ".cache", "agy-tools", "slot-owner"),
 		Timeout:   oauthAttempt,
 	}
@@ -191,20 +193,18 @@ func (a *OAuthAdder) runPTY(ctx context.Context, slot *LockedSlot, original stri
 	}
 	binary := a.Binary
 	if binary == "" {
-		if home, homeErr := os.UserHomeDir(); homeErr == nil {
-			binary = filepath.Join(home, ".local", "bin", "agy")
-		}
+		binary, _ = DefaultAgyBinary()
 	}
 	if binary == "" {
 		return OAuthAdded{}, errors.New("official agy CLI path is unavailable")
 	}
 	cmd := exec.Command(binary, "--gemini_dir", geminiDir, "-p", "/usage")
-	cmd.Env = replaceOAuthEnv(os.Environ(), map[string]string{
+	cmd.Env = envutil.Replace(os.Environ(), map[string]string{
 		"TERM":         "xterm-256color",
 		"PATH":         stubDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 		oauthMarkerEnv: marker,
 	})
-	terminal, err := pty.Start(cmd)
+	terminal, err := proc.StartPTY(cmd)
 	if err != nil {
 		return OAuthAdded{}, fmt.Errorf("start official agy sign-in: %w", err)
 	}
@@ -467,43 +467,8 @@ func installOAuthOpenStub(directory string) error {
 	return os.Chmod(path, 0o700)
 }
 
-func replaceOAuthEnv(environment []string, values map[string]string) []string {
-	result := make([]string, 0, len(environment)+len(values))
-	for _, item := range environment {
-		name, _, ok := strings.Cut(item, "=")
-		if !ok {
-			continue
-		}
-		if _, replace := values[name]; replace {
-			continue
-		}
-		result = append(result, item)
-	}
-	for name, value := range values {
-		result = append(result, name+"="+value)
-	}
-	return result
-}
-
 func stopOAuthProcess(cmd *exec.Cmd, wait chan error) {
-	if cmd == nil || cmd.Process == nil {
-		return
-	}
-	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-	if wait != nil {
-		select {
-		case <-wait:
-			return
-		case <-time.After(oauthStopGrace):
-		}
-	}
-	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	if wait != nil {
-		select {
-		case <-wait:
-		case <-time.After(2 * time.Second):
-		}
-	}
+	proc.TerminateProcessGroup(cmd, oauthStopGrace, wait)
 }
 
 func writeAll(writer io.Writer, data []byte) error {

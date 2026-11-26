@@ -8,11 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 
+	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/cloudmeta"
 	"github.com/gongjs/agym/internal/envutil"
+	"github.com/gongjs/agym/internal/proc"
 )
 
 const (
@@ -67,9 +68,18 @@ func (r AgyRunner) runQuery(ctx context.Context, shouldYield func() bool, queryA
 	}
 	binary := r.Binary
 	if binary == "" {
-		binary = filepath.Join(home, ".local", "bin", "agy")
+		if r.Home != "" {
+			binary = filepath.Join(r.Home, ".local", "bin", "agy")
+		} else if defBin, binErr := accounts.DefaultAgyBinary(); binErr == nil {
+			binary = defBin
+		}
 	}
-	quotaDir := filepath.Join(home, "Library", "Application Support", "sparkle", "agy-quota")
+	quotaDir := ""
+	if r.Home != "" {
+		quotaDir = filepath.Join(r.Home, "Library", "Application Support", "sparkle", "agy-quota")
+	} else {
+		quotaDir, _ = accounts.DefaultQuotaDir()
+	}
 	if err := prepareProbeDirs(home, quotaDir); err != nil {
 		return ProbeResult{ExitCode: -1, Stderr: err.Error(), Outcome: "error"}
 	}
@@ -93,7 +103,7 @@ func (r AgyRunner) runQuery(ctx context.Context, shouldYield func() bool, queryA
 	args := append([]string{"--gemini_dir", quotaDir}, queryArgs...)
 	cmd := exec.Command(binary, args...)
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	proc.ConfigureDetached(cmd)
 	envValues := map[string]string{
 		"TERM":         "dumb",
 		"PATH":         stubDir + string(os.PathListSeparator) + os.Getenv("PATH"),
@@ -126,16 +136,16 @@ func (r AgyRunner) runQuery(ctx context.Context, shouldYield func() bool, queryA
 			}
 			return ProbeResult{ExitCode: code, Stdout: stdout.String(), Stderr: stderr.String(), Outcome: "exited"}
 		case <-ctx.Done():
-			killProcessGroup(cmd)
+			proc.KillProcessGroup(cmd)
 			<-wait
 			return ProbeResult{ExitCode: -1, Stderr: ctx.Err().Error(), Outcome: "error"}
 		case <-deadline.C:
-			killProcessGroup(cmd)
+			proc.KillProcessGroup(cmd)
 			<-wait
 			return ProbeResult{ExitCode: -1, Stderr: "agy query timed out", Outcome: "timeout"}
 		case <-ticker.C:
 			if shouldYield != nil && shouldYield() {
-				killProcessGroup(cmd)
+				proc.KillProcessGroup(cmd)
 				<-wait
 				return ProbeResult{ExitCode: -1, Stderr: "yielded to an interactive account operation", Outcome: "yielded"}
 			}
@@ -200,15 +210,6 @@ func installOpenStub(directory string) error {
 		return err
 	}
 	return nil
-}
-
-func killProcessGroup(command *exec.Cmd) {
-	if command.Process == nil {
-		return
-	}
-	if err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL); err != nil {
-		_ = command.Process.Kill()
-	}
 }
 
 func processExitCode(err error) int {
