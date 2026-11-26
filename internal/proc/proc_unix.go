@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -74,7 +75,24 @@ func SignalExitCode(sig os.Signal) int {
 	}
 }
 
+type unixPTY struct {
+	file *os.File
+	cmd  *exec.Cmd
+}
+
+func (p *unixPTY) Read(b []byte) (int, error)  { return p.file.Read(b) }
+func (p *unixPTY) Write(b []byte) (int, error) { return p.file.Write(b) }
+func (p *unixPTY) Close() error                { return p.file.Close() }
+func (p *unixPTY) Wait() error                 { return p.cmd.Wait() }
+func (p *unixPTY) Terminate(grace time.Duration, wait <-chan error) {
+	TerminateProcessGroup(p.cmd, grace, wait)
+}
+
 // StartPTY launches cmd inside a new pseudo-terminal.
 func StartPTY(cmd *exec.Cmd) (PTYSession, error) {
-	return pty.Start(cmd)
+	f, err := pty.Start(cmd)
+	if err != nil {
+		return nil, err
+	}
+	return &unixPTY{file: f, cmd: cmd}, nil
 }

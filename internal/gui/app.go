@@ -15,6 +15,7 @@ import (
 
 // Run starts the Wails v3 menu bar tray application using the embedded frontend assets.
 func Run(assets embed.FS) error {
+	hideConsoleWindow()
 	roster, err := accounts.NewDefaultRoster()
 	if err != nil {
 		return err

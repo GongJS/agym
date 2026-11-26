@@ -84,7 +84,8 @@ func (r AgyRunner) runQuery(ctx context.Context, shouldYield func() bool, queryA
 		return ProbeResult{ExitCode: -1, Stderr: err.Error(), Outcome: "error"}
 	}
 	stubDir := filepath.Join(home, ".cache", "agy-tools", "probe-bin")
-	if err := installOpenStub(stubDir); err != nil {
+	stubEnv, err := proc.InstallBrowserOpenStub(stubDir, oauthMarkerEnv)
+	if err != nil {
 		return ProbeResult{ExitCode: -1, Stderr: err.Error(), Outcome: "error"}
 	}
 	relay, relayErr := cloudmeta.Start(r.CloudCodeURL)
@@ -108,6 +109,9 @@ func (r AgyRunner) runQuery(ctx context.Context, shouldYield func() bool, queryA
 		"TERM":         "dumb",
 		"PATH":         stubDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 		oauthMarkerEnv: marker,
+	}
+	for k, v := range stubEnv {
+		envValues[k] = v
 	}
 	if relay != nil {
 		envValues["CLOUD_CODE_URL"] = relay.URL
@@ -171,43 +175,6 @@ func prepareProbeDirs(home, quotaDir string) error {
 		if data, readErr := os.ReadFile(source); readErr == nil {
 			_ = os.WriteFile(target, data, 0o600)
 		}
-	}
-	return nil
-}
-
-func installOpenStub(directory string) error {
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
-	}
-	stub := filepath.Join(directory, "open")
-	body := "#!/bin/sh\ncase \"$*\" in\n  *accounts.google.com*) : > \"${" + oauthMarkerEnv + "}\" ;;\nesac\nexit 0\n"
-	if existing, err := os.ReadFile(stub); err == nil && string(existing) == body {
-		if info, statErr := os.Stat(stub); statErr == nil && info.Mode()&0o111 != 0 {
-			return nil
-		}
-	}
-	tmpFile, err := os.CreateTemp(directory, ".open-*")
-	if err != nil {
-		return err
-	}
-	tmp := tmpFile.Name()
-	if err := tmpFile.Chmod(0o700); err != nil {
-		_ = tmpFile.Close()
-		_ = os.Remove(tmp)
-		return err
-	}
-	if _, err := tmpFile.WriteString(body); err != nil {
-		_ = tmpFile.Close()
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := tmpFile.Close(); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, stub); err != nil {
-		_ = os.Remove(tmp)
-		return err
 	}
 	return nil
 }

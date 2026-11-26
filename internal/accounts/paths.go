@@ -1,12 +1,8 @@
 package accounts
 
-import (
-	"os"
-	"path/filepath"
-)
+import "path/filepath"
 
 const (
-	accountsDirectory = "Library/Application Support/sparkle"
 	accountsFilename  = "agy-accounts.txt"
 	manualFilename    = "agy-manual-only.txt"
 
@@ -22,14 +18,12 @@ type Paths struct {
 	ManualOnlyFile string
 }
 
-// DefaultPaths returns the established macOS account roster paths under the
-// current user's home directory.
+// DefaultPaths returns the platform account roster paths.
 func DefaultPaths() (Paths, error) {
-	home, err := os.UserHomeDir()
+	base, err := defaultBaseDir()
 	if err != nil {
 		return Paths{}, err
 	}
-	base := filepath.Join(home, accountsDirectory)
 	return Paths{
 		AccountsFile:   filepath.Join(base, accountsFilename),
 		ManualOnlyFile: filepath.Join(base, manualFilename),

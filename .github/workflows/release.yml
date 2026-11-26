@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release-macos:
+  build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,11 +29,54 @@ jobs:
             cp README.md README.zh-CN.md LICENSE "$STAGE/"
             tar -C "$STAGE" -czf "release/agym_${VERSION}_darwin_${ARCH}.tar.gz" agym README.md README.zh-CN.md LICENSE
           done
-          (cd release && shasum -a 256 *.tar.gz > checksums.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: release/*.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run tests
+        run: go test ./internal/...
+      - name: Build windows/amd64 archive
+        shell: pwsh
+        run: |
+          $VERSION = $env:GITHUB_REF_NAME.TrimStart('v')
+          $STAGE = "release/agym_${VERSION}_windows_amd64"
+          New-Item -ItemType Directory -Force -Path $STAGE | Out-Null
+          $env:CGO_ENABLED = "0"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          go build -tags production -ldflags="-s -w" -o "$STAGE/agym.exe" .
+          Copy-Item README.md, README.zh-CN.md, LICENSE $STAGE
+          Compress-Archive -Path "$STAGE/*" -DestinationPath "release/agym_${VERSION}_windows_amd64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: release/*.zip
+
+  publish:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd release
+          shasum -a 256 *.tar.gz *.zip > checksums.txt
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.tar.gz
+            release/*.zip
             release/checksums.txt
           generate_release_notes: true

@@ -7,6 +7,14 @@ import (
 	"path/filepath"
 )
 
+func defaultBaseDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "Application Support", "sparkle"), nil
+}
+
 // DefaultAgyBinary returns the default path to the official agy CLI on Unix systems.
 func DefaultAgyBinary() (string, error) {
 	home, err := os.UserHomeDir()
@@ -18,9 +26,9 @@ func DefaultAgyBinary() (string, error) {
 
 // DefaultQuotaDir returns the isolated profile directory used for agy quota and OAuth probes.
 func DefaultQuotaDir() (string, error) {
-	home, err := os.UserHomeDir()
+	base, err := defaultBaseDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "Library", "Application Support", "sparkle", "agy-quota"), nil
+	return filepath.Join(base, "agy-quota"), nil
 }

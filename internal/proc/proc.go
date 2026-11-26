@@ -13,6 +13,8 @@ var ErrPTYUnsupported = errors.New("pseudo-terminal is not supported on this pla
 // PTYSession represents an interactive pseudo-terminal attached to a subprocess.
 type PTYSession interface {
 	io.ReadWriteCloser
+	Wait() error
+	Terminate(grace time.Duration, wait <-chan error)
 }
 
 // TerminateProcessGroup sends a graceful termination signal to cmd's process

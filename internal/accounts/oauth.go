@@ -188,7 +188,8 @@ func (a *OAuthAdder) runPTY(ctx context.Context, slot *LockedSlot, original stri
 	}
 	defer os.RemoveAll(stubDir)
 	marker := filepath.Join(stubDir, "browser-requested")
-	if err := installOAuthOpenStub(stubDir); err != nil {
+	stubEnv, err := proc.InstallBrowserOpenStub(stubDir, oauthMarkerEnv)
+	if err != nil {
 		return OAuthAdded{}, fmt.Errorf("prepare browser handoff: %w", err)
 	}
 	binary := a.Binary
@@ -199,17 +200,21 @@ func (a *OAuthAdder) runPTY(ctx context.Context, slot *LockedSlot, original stri
 		return OAuthAdded{}, errors.New("official agy CLI path is unavailable")
 	}
 	cmd := exec.Command(binary, "--gemini_dir", geminiDir, "-p", "/usage")
-	cmd.Env = envutil.Replace(os.Environ(), map[string]string{
+	envValues := map[string]string{
 		"TERM":         "xterm-256color",
 		"PATH":         stubDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 		oauthMarkerEnv: marker,
-	})
+	}
+	for k, v := range stubEnv {
+		envValues[k] = v
+	}
+	cmd.Env = envutil.Replace(os.Environ(), envValues)
 	terminal, err := proc.StartPTY(cmd)
 	if err != nil {
 		return OAuthAdded{}, fmt.Errorf("start official agy sign-in: %w", err)
 	}
 	wait := make(chan error, 1)
-	go func() { wait <- cmd.Wait() }()
+	go func() { wait <- terminal.Wait() }()
 	reads := make(chan []byte, 4)
 	readDone := make(chan struct{})
 	defer close(readDone)
@@ -231,7 +236,7 @@ func (a *OAuthAdder) runPTY(ctx context.Context, slot *LockedSlot, original stri
 		}
 	}()
 	defer terminal.Close()
-	defer stopOAuthProcess(cmd, wait)
+	defer func() { terminal.Terminate(oauthStopGrace, wait) }()
 
 	deadline := time.NewTimer(a.Timeout)
 	defer deadline.Stop()
@@ -456,19 +461,6 @@ func prepareOAuthDirs(geminiDir string) error {
 		}
 	}
 	return nil
-}
-
-func installOAuthOpenStub(directory string) error {
-	body := "#!/bin/sh\ncase \"$*\" in\n  *accounts.google.com*) : > \"${" + oauthMarkerEnv + "}\" ;;\nesac\nexit 0\n"
-	path := filepath.Join(directory, "open")
-	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
-		return err
-	}
-	return os.Chmod(path, 0o700)
-}
-
-func stopOAuthProcess(cmd *exec.Cmd, wait chan error) {
-	proc.TerminateProcessGroup(cmd, oauthStopGrace, wait)
 }
 
 func writeAll(writer io.Writer, data []byte) error {

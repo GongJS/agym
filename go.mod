@@ -3,11 +3,13 @@ module github.com/gongjs/agym
 go 1.26.0
 
 require (
+	github.com/UserExistsError/conpty v0.1.4
 	github.com/creack/pty v1.1.24
 	github.com/gofrs/flock v0.13.2
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/spf13/cobra v1.10.2
 	github.com/wailsapp/wails/v3 v3.1.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
@@ -22,6 +24,5 @@ require (
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 )
