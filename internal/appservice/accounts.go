@@ -4,7 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -96,6 +99,30 @@ func (s *Accounts) RefreshQuotas() ([]AccountView, error) {
 // RefreshCurrentQuota performs a force refresh only for the currently active account.
 func (s *Accounts) RefreshCurrentQuota() ([]AccountView, error) {
 	return s.refreshQuotas(context.Background(), false)
+}
+
+// RefreshAccountQuota performs a force refresh only for the specified account email.
+func (s *Accounts) RefreshAccountQuota(email string) ([]AccountView, error) {
+	if s.roster == nil || s.refresher == nil {
+		return nil, fmt.Errorf("account service is not initialized")
+	}
+	s.cancelBackgroundRefresh()
+	s.refreshMu.Lock()
+	items, err := s.roster.List(context.Background())
+	if err != nil {
+		s.refreshMu.Unlock()
+		return nil, err
+	}
+	allEmails := make([]string, len(items))
+	for i, item := range items {
+		allEmails[i] = item.Email
+	}
+	cache, err := s.refresher.RefreshSubset(context.Background(), allEmails, []string{email}, true)
+	s.refreshMu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return s.buildAccountViews(items, cache), nil
 }
 
 func (s *Accounts) SwitchAccount(email string) error {
@@ -254,6 +281,51 @@ func (s *Accounts) SetRotation(email string, enabled bool) error {
 	return s.roster.SetRotation(email, enabled)
 }
 
+// SyncAgySettings updates the global ~/.gemini/antigravity-cli/settings.json
+// with the selected model display name and optional effort level while preserving
+// all other existing settings keys.
+func (s *Accounts) SyncAgySettings(modelName, effort string) error {
+	agyDir, err := projects.DefaultAgyDir()
+	if err != nil {
+		return err
+	}
+	return syncAgySettingsToPath(filepath.Join(agyDir, "settings.json"), modelName, effort)
+}
+
+func syncAgySettingsToPath(path, modelName, effort string) error {
+	settings := make(map[string]any)
+	if raw, err := os.ReadFile(path); err == nil {
+		if len(strings.TrimSpace(string(raw))) > 0 {
+			if unmarshalErr := json.Unmarshal(raw, &settings); unmarshalErr != nil {
+				return fmt.Errorf("parse agy settings: %w", unmarshalErr)
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if m := strings.TrimSpace(modelName); m != "" {
+		settings["model"] = m
+	}
+	switch e := strings.ToLower(strings.TrimSpace(effort)); e {
+	case "":
+	case "default":
+		delete(settings, "effort")
+	default:
+		settings["effort"] = e
+	}
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
 func (s *Accounts) accountViews(ctx context.Context, refresh bool) ([]AccountView, error) {
 	if !refresh {
 		if s.roster == nil || s.refresher == nil {
@@ -280,8 +352,10 @@ func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]Acc
 		s.refreshMu.Unlock()
 		return nil, err
 	}
+	allEmails := make([]string, 0, len(items))
 	var current, others []string
 	for _, item := range items {
+		allEmails = append(allEmails, item.Email)
 		if item.Current {
 			current = append(current, item.Email)
 		} else {
@@ -291,9 +365,9 @@ func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]Acc
 
 	var cache *usage.Cache
 	if len(current) > 0 {
-		cache, err = s.refresher.Refresh(ctx, current, true)
+		cache, err = s.refresher.RefreshSubset(ctx, allEmails, current, true)
 	} else if includeOthers {
-		cache, err = s.refresher.Refresh(ctx, others, true)
+		cache, err = s.refresher.RefreshSubset(ctx, allEmails, others, true)
 		others = nil
 	} else {
 		cache = usage.LoadCache(s.cachePath)
@@ -304,7 +378,7 @@ func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]Acc
 		return nil, err
 	}
 	if includeOthers && len(others) > 0 {
-		s.startBackgroundRefresh(others)
+		s.startBackgroundRefresh(allEmails, others)
 	}
 	return s.buildAccountViews(items, cache), nil
 }
@@ -318,7 +392,7 @@ func (s *Accounts) cancelBackgroundRefresh() {
 	s.bgMu.Unlock()
 }
 
-func (s *Accounts) startBackgroundRefresh(emails []string) {
+func (s *Accounts) startBackgroundRefresh(allEmails, targets []string) {
 	bgCtx, cancel := context.WithCancel(context.Background())
 	s.bgMu.Lock()
 	if s.bgCancel != nil {
@@ -332,7 +406,7 @@ func (s *Accounts) startBackgroundRefresh(emails []string) {
 		defer cancel()
 		s.refreshMu.Lock()
 		if bgCtx.Err() == nil {
-			_, _ = s.refresher.Refresh(bgCtx, emails, true)
+			_, _ = s.refresher.RefreshSubset(bgCtx, allEmails, targets, true)
 		}
 		s.refreshMu.Unlock()
 		if bgCtx.Err() == nil && cb != nil {

@@ -4,7 +4,7 @@
 
 面向 macOS 的轻量级 `agy` 多账户管理工具：提供菜单栏托盘弹窗与命令行 CLI（单二进制分发），支持安全切换钥匙串登录态、查询 Gemini/Claude 配额窗口与模型目录。
 
-基于 Go 与 [Wails v3](https://wails.io/) 构建，前端采用零构建依赖的原生 HTML/CSS/JavaScript。
+基于纯 Go 与 [MyGo](https://github.com/egoist/mygo) 原生 GPU UI 构建的单文件菜单栏桌面应用。
 
 ## 核心特性
 

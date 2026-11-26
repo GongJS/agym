@@ -1,18 +1,14 @@
 GO ?= go
 
-.PHONY: test build build-purego generate-bindings
+.PHONY: test build build-purego
 
 test:
 	$(GO) test ./...
 
 build:
 	mkdir -p dist
-	$(GO) build -tags production -o dist/agym .
+	$(GO) build -ldflags="-s -w" -o dist/agym .
 
-# Linux CI / sandbox compile check. Wails purego is experimental.
 build-purego:
 	mkdir -p dist
-	CGO_ENABLED=0 $(GO) build -tags purego,production -o dist/agym .
-
-generate-bindings:
-	wails3 generate bindings -b -f '-tags=purego' -dir . -d frontend/bindings .
+	CGO_ENABLED=0 $(GO) build -ldflags="-s -w" -o dist/agym .

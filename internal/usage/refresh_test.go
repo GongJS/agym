@@ -143,3 +143,26 @@ func TestQuotaFromResultDoesNotExposeStderr(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshSubsetRetainsOtherAccounts(t *testing.T) {
+	kc := fakeKeychain{
+		"gemini/antigravity":              encodedLogin("a@example.com"),
+		"gemini-agy-backup/a@example.com": encodedLogin("a@example.com"),
+		"gemini-agy-backup/b@example.com": encodedLogin("b@example.com"),
+	}
+	roster, cachePath := setupRefresh(t, kc)
+	refresher := NewRefresher(roster, fakeRunner{ProbeResult{ExitCode: 0, Stdout: usageReport, Outcome: "exited"}}, cachePath)
+	if _, err := refresher.Refresh(context.Background(), []string{"a@example.com", "b@example.com"}, true); err != nil {
+		t.Fatalf("initial Refresh error = %v", err)
+	}
+	cache, err := refresher.RefreshSubset(context.Background(), []string{"a@example.com", "b@example.com"}, []string{"a@example.com"}, true)
+	if err != nil {
+		t.Fatalf("RefreshSubset error = %v", err)
+	}
+	if _, ok := cache.View("a@example.com"); !ok {
+		t.Fatal("expected refreshed account a@example.com in cache")
+	}
+	if _, ok := cache.View("b@example.com"); !ok {
+		t.Fatal("expected non-targeted account b@example.com to remain retained in cache")
+	}
+}

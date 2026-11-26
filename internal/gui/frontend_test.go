@@ -1,37 +1,53 @@
 package gui
 
 import (
-	"os"
-	"path/filepath"
-	"regexp"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/gongjs/agym/internal/appservice"
+	"github.com/gongjs/agym/internal/projects"
+	"github.com/gongjs/agym/internal/usage"
 )
 
-func TestFrontendDOMSelectorsExistInIndexHTML(t *testing.T) {
-	htmlBytes, err := os.ReadFile(filepath.Join("..", "..", "frontend", "index.html"))
-	if err != nil {
-		t.Fatalf("read frontend/index.html: %v", err)
+func TestNativeUIRendersAccountsAndProjects(t *testing.T) {
+	state := newUIState(nil)
+	state.accounts = []appservice.AccountView{
+		{
+			Email:         "user@example.com",
+			Current:       true,
+			HasSavedLogin: true,
+			Quota: &usage.AccountView{
+				TierName: "Free",
+				Buckets: map[string]usage.Bucket{
+					"Gemini": {Percent: 80, Reset: "2h"},
+				},
+			},
+		},
 	}
-	jsBytes, err := os.ReadFile(filepath.Join("..", "..", "frontend", "main.js"))
-	if err != nil {
-		t.Fatalf("read frontend/main.js: %v", err)
+	state.expandedAccounts["user@example.com"] = true
+	state.projects = []projects.ProjectView{
+		{
+			Name:            "agym",
+			Path:            "/tmp/agym",
+			Active:          true,
+			Model:           "gemini-4-hydrogen-medium",
+			StepCount:       12,
+			ContextLimit:    1_000_000,
+			LatestInput:     4200,
+			LatestCacheRead: 29900,
+			LatestOutput:    563,
+		},
+	}
+	state.expandedProjects["/tmp/agym"] = true
+
+	imgAccounts := ui.Render(state.view, 396, 560, 1)
+	if imgAccounts == nil || imgAccounts.Bounds().Empty() {
+		t.Fatal("expected non-empty rendered image for accounts tab")
 	}
 
-	idDeclRe := regexp.MustCompile(`\bid="([A-Za-z0-9_-]+)"`)
-	htmlIDs := make(map[string]bool)
-	for _, match := range idDeclRe.FindAllStringSubmatch(string(htmlBytes), -1) {
-		htmlIDs[match[1]] = true
-	}
-
-	selectorRe := regexp.MustCompile(`"#([A-Za-z0-9_-]+)"`)
-	matches := selectorRe.FindAllStringSubmatch(string(jsBytes), -1)
-	if len(matches) == 0 {
-		t.Fatal("expected at least one #id selector in frontend/main.js")
-	}
-	for _, match := range matches {
-		id := match[1]
-		if !htmlIDs[id] {
-			t.Errorf("frontend/main.js references #%s, which does not exist in frontend/index.html", id)
-		}
+	state.tabIndex = 1
+	imgProjects := ui.Render(state.view, 396, 560, 1)
+	if imgProjects == nil || imgProjects.Bounds().Empty() {
+		t.Fatal("expected non-empty rendered image for projects tab")
 	}
 }

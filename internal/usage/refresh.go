@@ -44,6 +44,11 @@ func DefaultModelCatalogPath() (string, error) {
 // Refresh updates stale accounts, or all accounts when force is true. Quota is
 // persisted before any optional model query so a model timeout cannot lose it.
 func (r *Refresher) Refresh(ctx context.Context, emails []string, force bool) (*Cache, error) {
+	return r.RefreshSubset(ctx, emails, emails, force)
+}
+
+// RefreshSubset updates only targetEmails while retaining cache entries for all retainEmails.
+func (r *Refresher) RefreshSubset(ctx context.Context, retainEmails, targetEmails []string, force bool) (*Cache, error) {
 	if r == nil {
 		return nil, errors.New("quota refresher is unavailable")
 	}
@@ -58,10 +63,10 @@ func (r *Refresher) Refresh(ctx context.Context, emails []string, force bool) (*
 	}
 	models := catalog.Load(catalogPath)
 	requestedAt := time.Now()
-	cache.Retain(emails)
-	models.Retain(emails)
-	targets := make([]string, 0, len(emails))
-	for _, email := range emails {
+	cache.Retain(retainEmails)
+	models.Retain(retainEmails)
+	targets := make([]string, 0, len(targetEmails))
+	for _, email := range targetEmails {
 		quotaDue := cache.NeedsProbe(email, requestedAt, requestedAt, force)
 		if quotaDue || shouldFetchModels(models, email, latestMembers(cache, email), requestedAt) {
 			targets = append(targets, email)
@@ -73,7 +78,7 @@ func (r *Refresher) Refresh(ctx context.Context, emails []string, force bool) (*
 
 	firstPass := make(map[string]string, len(targets))
 	for _, email := range targets {
-		attempted, err := r.refreshOne(ctx, runner, cache, models, email, emails, requestedAt, force, false, catalogPath)
+		attempted, err := r.refreshOne(ctx, runner, cache, models, email, retainEmails, requestedAt, force, false, catalogPath)
 		if err != nil {
 			return cache, err
 		}
@@ -85,7 +90,7 @@ func (r *Refresher) Refresh(ctx context.Context, emails []string, force bool) (*
 	}
 	if retryEmails := retryCandidates(firstPass); len(retryEmails) > 0 {
 		for _, email := range retryEmails {
-			if _, err := r.refreshOne(ctx, runner, cache, models, email, emails, requestedAt, true, true, catalogPath); err != nil {
+			if _, err := r.refreshOne(ctx, runner, cache, models, email, retainEmails, requestedAt, true, true, catalogPath); err != nil {
 				return cache, err
 			}
 		}

@@ -4,7 +4,7 @@
 
 A lightweight macOS menu bar tray app and CLI for managing multiple `agy` Google accounts, monitoring Gemini/Claude quota windows, and safely switching Keychain credentials.
 
-Built as a single Go binary with [Wails v3](https://wails.io/) and a zero-build vanilla HTML/CSS/JS popup.
+Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) native GPU UI and menu bar popover.
 
 ## Features
 
