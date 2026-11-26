@@ -22,23 +22,28 @@
 
 ## 安装
 
-### 从源码编译
+### 一键脚本安装（`curl`）
 
 ```sh
-git clone https://github.com/gongjs/agym.git
-cd agym
-make build
-cp dist/agym ~/.local/bin/agy-tools
+curl -fsSL https://raw.githubusercontent.com/GongJS/agym/main/install.sh | sh
 ```
 
 ### Homebrew（Tap）
 
-发布到 Homebrew Tap 后可通过以下命令安装并设置自启：
+发布到 Homebrew Tap 后可通过以下命令一键安装并设置自启：
 
 ```sh
-brew tap gongjs/tap
-brew install agym
+brew install gongjs/tap/agym
 brew services start agym
+```
+
+### 从源码编译
+
+```sh
+git clone https://github.com/GongJS/agym.git
+cd agym
+make build
+cp dist/agym ~/.local/bin/agym
 ```
 
 ## 使用方法

@@ -22,13 +22,10 @@ Built as a single Go binary with [Wails v3](https://wails.io/) and a zero-build 
 
 ## Installation
 
-### From Source
+### Quick Install (`curl`)
 
 ```sh
-git clone https://github.com/gongjs/agym.git
-cd agym
-make build
-cp dist/agym ~/.local/bin/agy-tools
+curl -fsSL https://raw.githubusercontent.com/GongJS/agym/main/install.sh | sh
 ```
 
 ### Homebrew (Tap)
@@ -36,9 +33,17 @@ cp dist/agym ~/.local/bin/agy-tools
 Once published to a Homebrew Tap:
 
 ```sh
-brew tap gongjs/tap
-brew install agym
+brew install gongjs/tap/agym
 brew services start agym
+```
+
+### From Source
+
+```sh
+git clone https://github.com/GongJS/agym.git
+cd agym
+make build
+cp dist/agym ~/.local/bin/agym
 ```
 
 ## Usage
