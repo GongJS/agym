@@ -65,6 +65,8 @@ let latestAccounts = [];
 let latestSummary = { key: "summary.loading", params: {} };
 let latestStatus = { key: "", params: {}, raw: "", isError: false };
 let latestOAuthView = null;
+const expandedEmails = new Set();
+let hasInitializedExpand = false;
 
 function readPrefMap(storageKey) {
   try {
@@ -174,6 +176,23 @@ function tierClassForPercent(percent) {
   return "";
 }
 
+function formatCollapsedSummary(account) {
+  const quota = account.quota;
+  if (!quota?.buckets) return quotaLabel(account);
+  const parts = [];
+  const g5 = quota.buckets.g5;
+  const gw = quota.buckets.gw;
+  const gPct = g5 && g5.percent >= 0 ? g5.percent : (gw && gw.percent >= 0 ? gw.percent : -1);
+  if (gPct >= 0) parts.push(`G ${gPct}%`);
+
+  const c5 = quota.buckets.c5;
+  const cw = quota.buckets.cw;
+  const cPct = c5 && c5.percent >= 0 ? c5.percent : (cw && cw.percent >= 0 ? cw.percent : -1);
+  if (cPct >= 0) parts.push(`C ${cPct}%`);
+
+  return parts.length ? parts.join(" · ") : quotaLabel(account);
+}
+
 function renderQuotaWindow(labelKey, bucket) {
   const pct = Math.max(0, Math.min(100, bucket.percent));
   const tierClass = tierClassForPercent(pct);
@@ -225,16 +244,16 @@ function renderQuota(account, container) {
       titleKey: "quota.group.gemini",
       members: quota.members?.gemini,
       windows: [
-        { key: "gw", labelKey: "quota.window.weekly" },
         { key: "g5", labelKey: "quota.window.5h" },
+        { key: "gw", labelKey: "quota.window.weekly" },
       ],
     },
     {
       titleKey: "quota.group.claude",
       members: quota.members?.claude,
       windows: [
-        { key: "cw", labelKey: "quota.window.weekly" },
         { key: "c5", labelKey: "quota.window.5h" },
+        { key: "cw", labelKey: "quota.window.weekly" },
       ],
     },
   ];
@@ -266,9 +285,12 @@ function renderQuota(account, container) {
     }
     card.append(head);
 
+    const grid = document.createElement("div");
+    grid.className = "quota-grid";
     for (const { key, labelKey } of activeWindows) {
-      card.append(renderQuotaWindow(labelKey, quota.buckets[key]));
+      grid.append(renderQuotaWindow(labelKey, quota.buckets[key]));
     }
+    card.append(grid);
     panel.append(card);
   }
 
@@ -363,12 +385,45 @@ function renderControlsRow(account, container) {
 }
 
 function renderAccount(account) {
-  const row = document.createElement("article");
-  row.className = "account-row";
+  const isExpanded = expandedEmails.has(account.email);
+  const card = document.createElement("article");
+  card.className = `account-card${account.current ? " is-current" : ""}${isExpanded ? " expanded" : ""}`;
   const needsAddCurrent = account.current && !account.inRoster;
+
+  const header = document.createElement("div");
+  header.className = "card-header";
 
   const top = document.createElement("div");
   top.className = "row-top";
+
+  // Radio 单选切换账户
+  const radioLabel = document.createElement("label");
+  radioLabel.className = "account-radio";
+  radioLabel.title = account.current ? t("account.switchCurrentAria", { email: account.email }) : t("account.selectAria", { email: account.email });
+  const radioInput = document.createElement("input");
+  radioInput.type = "radio";
+  radioInput.name = "active-account";
+  radioInput.checked = account.current;
+  radioInput.disabled = !account.hasSavedLogin && !account.current;
+  radioInput.setAttribute("aria-label", t("account.selectAria", { email: account.email }));
+  radioInput.addEventListener("click", (e) => e.stopPropagation());
+  radioInput.addEventListener("change", async () => {
+    if (account.current || !radioInput.checked) return;
+    radioInput.disabled = true;
+    setStatusKey("status.switching");
+    try {
+      await Accounts.SwitchAccount(account.email);
+      setStatusKey("status.switched", { email: account.email });
+      expandedEmails.add(account.email);
+      await loadAccounts();
+    } catch (error) {
+      setStatusRaw(error?.message ?? String(error), true);
+      await loadAccounts();
+    }
+  });
+  const radioDot = document.createElement("span");
+  radioDot.className = "radio-dot";
+  radioLabel.append(radioInput, radioDot);
 
   const avatar = document.createElement("span");
   avatar.className = "avatar";
@@ -382,82 +437,8 @@ function renderAccount(account) {
   email.title = account.email;
   meta.append(email);
 
-  const badges = document.createElement("div");
-  badges.className = "row-badges";
-  if (account.current) badges.append(makeBadge(t("badge.current"), "current"));
-  if (!account.hasSavedLogin) badges.append(makeBadge(t("badge.noLogin"), "missing"));
-  if (account.quota?.tierName) badges.append(makeBadge(account.quota.tierName, "tier", account.quota.tierId || t("badge.tierTitle")));
-  if (account.quota?.regionCode) badges.append(makeBadge(account.quota.regionCode, "region", t("badge.regionTitle")));
-
-  const actions = document.createElement("div");
-  actions.className = "row-actions";
-
-  const rotationLabel = document.createElement("label");
-  rotationLabel.className = "rotation";
-  rotationLabel.title = t("account.rotationTitle");
-  const rotation = document.createElement("input");
-  rotation.type = "checkbox";
-  rotation.checked = account.rotation;
-  rotation.setAttribute("aria-label", t("account.rotationAria", { email: account.email }));
-  rotation.addEventListener("change", async () => {
-    rotation.disabled = true;
-    try {
-      await Accounts.SetRotation(account.email, rotation.checked);
-      setStatusKey("status.rotationSaved");
-    } catch (error) {
-      rotation.checked = !rotation.checked;
-      setStatusRaw(error?.message ?? String(error), true);
-    } finally {
-      rotation.disabled = false;
-    }
-  });
-  rotationLabel.append(rotation, document.createTextNode(t("account.rotation")));
-  rotationLabel.hidden = needsAddCurrent;
-
-  const switchButton = document.createElement("button");
-  switchButton.className = account.current ? "switch-button current" : "switch-button";
-  switchButton.type = "button";
-  switchButton.textContent = account.current ? t("account.switchCurrent") : t("account.switch");
-  switchButton.disabled = account.current || !account.hasSavedLogin;
-  switchButton.setAttribute(
-    "aria-label",
-    account.current
-      ? t("account.switchCurrentAria", { email: account.email })
-      : t("account.switchAria", { email: account.email })
-  );
-  switchButton.addEventListener("click", async () => {
-    switchButton.disabled = true;
-    setStatusKey("status.switching");
-    try {
-      await Accounts.SwitchAccount(account.email);
-      setStatusKey("status.switched", { email: account.email });
-      await loadAccounts();
-    } catch (error) {
-      setStatusRaw(error?.message ?? String(error), true);
-      switchButton.disabled = false;
-    }
-  });
-  switchButton.hidden = needsAddCurrent;
-
-  const remove = document.createElement("button");
-  remove.className = "remove-button";
-  remove.type = "button";
-  remove.title = t("account.removeTitle");
-  remove.setAttribute("aria-label", t("account.removeAria", { email: account.email }));
-  remove.textContent = "×";
-  remove.addEventListener("click", async () => {
-    if (!window.confirm(t("account.removeConfirm", { email: account.email }))) return;
-    remove.disabled = true;
-    try {
-      await Accounts.RemoveAccount(account.email);
-      setStatusKey("status.removed");
-      await loadAccounts();
-    } catch (error) {
-      setStatusRaw(error?.message ?? String(error), true);
-      remove.disabled = false;
-    }
-  });
-  remove.hidden = needsAddCurrent;
+  const headerRight = document.createElement("div");
+  headerRight.className = "header-right";
 
   const addCurrentButton = document.createElement("button");
   addCurrentButton.className = "current-add-button";
@@ -465,7 +446,8 @@ function renderAccount(account) {
   addCurrentButton.textContent = t("account.saveAndAdd");
   addCurrentButton.hidden = !needsAddCurrent;
   addCurrentButton.setAttribute("aria-label", t("account.saveAndAddAria", { email: account.email }));
-  addCurrentButton.addEventListener("click", async () => {
+  addCurrentButton.addEventListener("click", async (e) => {
+    e.stopPropagation();
     addCurrentButton.disabled = true;
     setStatusKey("status.savingCurrent");
     try {
@@ -483,17 +465,137 @@ function renderAccount(account) {
     }
   });
 
-  actions.append(rotationLabel, switchButton, remove, addCurrentButton);
-  top.append(avatar, meta, actions);
-  row.append(top);
-  if (badges.childElementCount > 0) row.append(badges);
-  renderQuota(account, row);
-  renderControlsRow(account, row);
-  return row;
+  const chevronBtn = document.createElement("button");
+  chevronBtn.className = "chevron-btn";
+  chevronBtn.type = "button";
+  chevronBtn.setAttribute("aria-expanded", String(isExpanded));
+  chevronBtn.setAttribute("aria-label", t("account.expandAria", { email: account.email }));
+  const chevronIcon = document.createElement("span");
+  chevronIcon.className = "chevron-icon";
+  chevronIcon.textContent = "›";
+  chevronBtn.append(chevronIcon);
+
+  headerRight.append(addCurrentButton, chevronBtn);
+  top.append(radioLabel, avatar, meta, headerRight);
+
+  const sub = document.createElement("div");
+  sub.className = "header-sub";
+  const badges = document.createElement("div");
+  badges.className = "row-badges";
+  if (account.current) badges.append(makeBadge(t("badge.current"), "current"));
+  if (!account.hasSavedLogin) badges.append(makeBadge(t("badge.noLogin"), "missing"));
+  if (account.quota?.tierName) {
+    badges.append(makeBadge(account.quota.tierName, "tier", account.quota.tierId || t("badge.tierTitle")));
+  } else if (account.quota) {
+    badges.append(makeBadge(t("badge.free"), "free", account.quota.tierId || t("badge.tierTitle")));
+  }
+  if (account.quota?.regionCode) badges.append(makeBadge(account.quota.regionCode, "region", t("badge.regionTitle")));
+  const rotationBadge = makeBadge(t("account.rotation"), "rotation-pill");
+  rotationBadge.hidden = !account.rotation || needsAddCurrent;
+  badges.append(rotationBadge);
+
+  const quotaSummary = document.createElement("span");
+  quotaSummary.className = "quota-summary";
+  quotaSummary.textContent = formatCollapsedSummary(account);
+
+  sub.append(badges, quotaSummary);
+  header.append(top, sub);
+
+  // 展开区（带平滑动画）
+  const detailsWrap = document.createElement("div");
+  detailsWrap.className = "card-details-wrap";
+  const detailsInner = document.createElement("div");
+  detailsInner.className = "card-details-inner";
+  const detailsBody = document.createElement("div");
+  detailsBody.className = "card-details-body";
+
+  renderQuota(account, detailsBody);
+  renderControlsRow(account, detailsBody);
+
+  const detailsFooter = document.createElement("div");
+  detailsFooter.className = "details-footer";
+  detailsFooter.hidden = needsAddCurrent;
+
+  const switchLabel = document.createElement("label");
+  switchLabel.className = "switch-label";
+  switchLabel.title = t("account.rotationTitle");
+  const switchSpan = document.createElement("span");
+  switchSpan.className = "switch";
+  const rotation = document.createElement("input");
+  rotation.type = "checkbox";
+  rotation.checked = account.rotation;
+  rotation.setAttribute("aria-label", t("account.rotationAria", { email: account.email }));
+  rotation.addEventListener("change", async () => {
+    rotation.disabled = true;
+    try {
+      await Accounts.SetRotation(account.email, rotation.checked);
+      account.rotation = rotation.checked;
+      rotationBadge.hidden = !account.rotation || needsAddCurrent;
+      setStatusKey("status.rotationSaved");
+    } catch (error) {
+      rotation.checked = !rotation.checked;
+      setStatusRaw(error?.message ?? String(error), true);
+    } finally {
+      rotation.disabled = false;
+    }
+  });
+  const slider = document.createElement("span");
+  slider.className = "switch-slider";
+  switchSpan.append(rotation, slider);
+  switchLabel.append(switchSpan, document.createTextNode(t("account.rotation")));
+
+  const remove = document.createElement("button");
+  remove.className = "remove-text-button";
+  remove.type = "button";
+  remove.title = t("account.removeTitle");
+  remove.setAttribute("aria-label", t("account.removeAria", { email: account.email }));
+  remove.textContent = getLang() === "zh-CN" ? "移除" : "Remove";
+  remove.addEventListener("click", async () => {
+    if (!window.confirm(t("account.removeConfirm", { email: account.email }))) return;
+    remove.disabled = true;
+    try {
+      await Accounts.RemoveAccount(account.email);
+      expandedEmails.delete(account.email);
+      setStatusKey("status.removed");
+      await loadAccounts();
+    } catch (error) {
+      setStatusRaw(error?.message ?? String(error), true);
+      remove.disabled = false;
+    }
+  });
+
+  detailsFooter.append(switchLabel, remove);
+  detailsBody.append(detailsFooter);
+  detailsInner.append(detailsBody);
+  detailsWrap.append(detailsInner);
+
+  const toggleExpand = () => {
+    const next = !card.classList.contains("expanded");
+    card.classList.toggle("expanded", next);
+    chevronBtn.setAttribute("aria-expanded", String(next));
+    if (next) {
+      expandedEmails.add(account.email);
+    } else {
+      expandedEmails.delete(account.email);
+    }
+  };
+  header.addEventListener("click", toggleExpand);
+  chevronBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleExpand();
+  });
+
+  card.append(header, detailsWrap);
+  return card;
 }
 
 function renderAccountList(accounts) {
   latestAccounts = accounts;
+  if (!hasInitializedExpand && accounts.length > 0) {
+    hasInitializedExpand = true;
+    const active = accounts.find((a) => a.current) ?? accounts[0];
+    if (active) expandedEmails.add(active.email);
+  }
   list.replaceChildren(...accounts.map(renderAccount));
   count.textContent = String(accounts.length);
   emptyState.hidden = accounts.length !== 0;
@@ -532,6 +634,7 @@ addForm.addEventListener("submit", async (event) => {
     const added = await Accounts.AddExistingAccount(email);
     emailInput.value = "";
     if (added) {
+      expandedEmails.add(email);
       setStatusKey("status.added");
       await reloadAndRefreshQuotas();
     } else {
@@ -600,6 +703,7 @@ function renderOAuthStatus(view) {
     oauthStart.disabled = false;
     if (oauthPollTimer) clearInterval(oauthPollTimer);
     oauthPollTimer = null;
+    if (view.email) expandedEmails.add(view.email);
     if (oauthAttemptID && handledOAuthAddedAttemptID !== oauthAttemptID) {
       handledOAuthAddedAttemptID = oauthAttemptID;
       void reloadAndRefreshQuotas();
