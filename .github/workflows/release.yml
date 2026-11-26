@@ -12,8 +12,8 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Run tests
@@ -25,11 +25,11 @@ jobs:
           for ARCH in arm64 amd64; do
             STAGE="release/agym_${VERSION}_darwin_${ARCH}"
             mkdir -p "$STAGE"
-            CGO_ENABLED=1 GOOS=darwin GOARCH="$ARCH" go build -tags production -ldflags="-s -w" -o "$STAGE/agym" .
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$ARCH" go build -ldflags="-s -w" -o "$STAGE/agym" .
             cp README.md README.zh-CN.md LICENSE "$STAGE/"
             tar -C "$STAGE" -czf "release/agym_${VERSION}_darwin_${ARCH}.tar.gz" agym README.md README.zh-CN.md LICENSE
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: release-macos
           path: release/*.tar.gz
@@ -37,8 +37,8 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Run tests
@@ -52,10 +52,10 @@ jobs:
           $env:CGO_ENABLED = "0"
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
-          go build -tags production -ldflags="-s -w" -o "$STAGE/agym.exe" .
+          go build -ldflags="-s -w" -o "$STAGE/agym.exe" .
           Copy-Item README.md, README.zh-CN.md, LICENSE $STAGE
           Compress-Archive -Path "$STAGE/*" -DestinationPath "release/agym_${VERSION}_windows_amd64.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: release-windows
           path: release/*.zip
@@ -64,7 +64,7 @@ jobs:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           path: release
           merge-multiple: true
