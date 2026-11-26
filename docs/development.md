@@ -17,8 +17,8 @@ go run . accounts
 go run . who
 go run . quota --refresh
 
-# Launch tray app from source
-go run . tray
+# Launch menu bar UI from source
+go run . ui
 ```
 
 ## Wails Bindings

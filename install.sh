@@ -58,5 +58,5 @@ case ":${PATH:-}:" in
     echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
     ;;
 esac
-echo "Run 'agym' (or 'agym tray') to launch the menu bar app, or 'agym --help' for CLI usage."
+echo "Run 'agym' (or 'agym ui') to launch the menu bar UI, or 'agym --help' for CLI usage."
 echo "Optional: run 'agym install-hook' only if you want automatic account handoff during 'agym supervise' sessions."

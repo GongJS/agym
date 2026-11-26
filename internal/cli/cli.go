@@ -62,8 +62,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "agym",
-		Short:         "agym — account manager CLI & tray app",
-		Long:          "agym — account manager CLI & tray app\n\nRun without arguments (or with `tray`) to launch the macOS menu bar tray app.",
+		Short:         "agym — account manager CLI & menu bar UI",
+		Long:          "agym — account manager CLI & menu bar UI\n\nRun without arguments (or with `ui`) to launch the macOS menu bar UI.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
@@ -75,8 +75,8 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 
 	root.AddCommand(
 		&cobra.Command{
-			Use:   "tray",
-			Short: "Launch the menu bar tray app (default when no args)",
+			Use:   "ui",
+			Short: "Launch the menu bar UI (default when no args)",
 		},
 		&cobra.Command{
 			Use:   "accounts",

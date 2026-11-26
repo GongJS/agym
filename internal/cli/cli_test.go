@@ -12,8 +12,8 @@ func TestRunHelpCommands(t *testing.T) {
 		if code := Run(args, &stdout, &stderr); code != 0 {
 			t.Fatalf("Run(%v) = %d, stderr=%q", args, code, stderr.String())
 		}
-		if !strings.Contains(stdout.String(), "agym") || !strings.Contains(stdout.String(), "tray") {
-			t.Fatalf("help output missing agym/tray usage: %q", stdout.String())
+		if !strings.Contains(stdout.String(), "agym") || !strings.Contains(stdout.String(), "ui") {
+			t.Fatalf("help output missing agym/ui usage: %q", stdout.String())
 		}
 	}
 }

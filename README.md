@@ -8,7 +8,7 @@ Built as a single Go binary with [Wails v3](https://wails.io/) and a zero-build 
 
 ## Features
 
-- **Menu Bar Tray & CLI in One Binary**: Run `agym` (or `agym tray`) for the macOS menu bar popup, or invoke subcommands directly from the terminal.
+- **Menu Bar UI & CLI in One Binary**: Run `agym` (or `agym ui`) for the macOS menu bar popup, or invoke subcommands directly from the terminal.
 - **Safe Keychain Switching**: Stores account backups under `gemini-agy-backup/<email>` in macOS Keychain and coordinates all reads/writes with a cross-process `slot.lock`. Raw tokens never leave the backend.
 - **Official OAuth Onboarding**: Sign in to new accounts directly from the tray via official `agy` OAuth, with automatic quota fetching right after an account is added.
 - **Quota & Model Visibility**: Displays Gemini and Claude 5-hour / weekly quota windows, subscription tier, exit region, and per-account model & thinking preferences.
@@ -51,10 +51,10 @@ cp dist/agym ~/.local/bin/agym
 ### Menu Bar Tray
 
 ```sh
-# Launch the menu bar tray app (default when no subcommand is given)
+# Launch the menu bar UI (default when no subcommand is given)
 agym
 # or explicitly
-agym tray
+agym ui
 ```
 
 ### CLI Commands

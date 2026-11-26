@@ -8,7 +8,7 @@
 
 ## 核心特性
 
-- **单二进制双模式**：直接运行 `agym`（或 `agym tray`）启动 macOS 菜单栏托盘应用；带子命令运行时作为 CLI 工具使用。
+- **单二进制双模式**：直接运行 `agym`（或 `agym ui`）启动 macOS 菜单栏界面；带子命令运行时作为 CLI 工具使用。
 - **安全的钥匙串切换**：通过 macOS Keychain（`gemini-agy-backup/<email>`）备份多账号登录态，配合跨进程 `slot.lock` 文件锁安全切换；原始凭据不会传入前端或日志。
 - **官方 OAuth 登录与自动拉取额度**：支持在托盘内直接拉起官方 `agy` OAuth 登录新账户，添加账户成功后自动查询配额。
 - **配额与模型展示**：展示 Gemini / Claude 5 小时与每周额度、订阅等级、出口地区，以及单账户模型与思考等级下拉偏好。
@@ -53,7 +53,7 @@ cp dist/agym ~/.local/bin/agym
 ```sh
 agym
 # 或显式指定
-agym tray
+agym ui
 ```
 
 ### 常用 CLI 命令
