@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +89,7 @@ func TestWriteOwnerMarkerIsPrivateAndContainsOnlyOwnerEmail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("owner marker mode = %o, want 600", info.Mode().Perm())
 	}
 	data, err := os.ReadFile(path)
@@ -98,6 +99,9 @@ func TestWriteOwnerMarkerIsPrivateAndContainsOnlyOwnerEmail(t *testing.T) {
 }
 
 func TestOAuthPTYTimeoutWithEmptyGeminiDirStopsReaderAndProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script test helper requires POSIX /bin/sh")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := t.TempDir()

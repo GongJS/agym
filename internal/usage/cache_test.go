@@ -3,6 +3,7 @@ package usage
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -44,7 +45,7 @@ func TestLoadPythonCachePreservesQuotaAndMetadata(t *testing.T) {
 		}
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("cache permissions = %v, %v; want 0600", info, err)
 	}
 }

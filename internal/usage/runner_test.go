@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -16,6 +17,9 @@ func writeExecutable(t *testing.T, path, content string) {
 }
 
 func TestAgyRunnerUsesPrivateUsageProfileAndOfficialArguments(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script test helper requires POSIX /bin/sh")
+	}
 	home := t.TempDir()
 	binary := filepath.Join(t.TempDir(), "agy")
 	argLog := filepath.Join(t.TempDir(), "args.txt")
@@ -46,6 +50,9 @@ func TestAgyRunnerUsesPrivateUsageProfileAndOfficialArguments(t *testing.T) {
 }
 
 func TestAgyRunnerStopsBrowserOAuthFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script test helper requires POSIX /bin/sh")
+	}
 	home := t.TempDir()
 	binary := filepath.Join(t.TempDir(), "agy")
 	writeExecutable(t, binary, "#!/bin/sh\nopen https://accounts.google.com/signin\nexit 1\n")
