@@ -99,6 +99,9 @@ var (
 	moonSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`))
 	chevronRightSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))
 	chevronDownSVG  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`))
+	refreshSVG      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`))
+	plusSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`))
+	closeSVG        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`))
 )
 
 type uiState struct {
@@ -122,10 +125,12 @@ type uiState struct {
 	currentQuotaBusy  bool
 	switching         bool
 	switchGen         uint64
-	projectsLoaded    bool
-	projectsLoading   bool
-	adding            bool
-	addEmail          string
+	projectsLoaded     bool
+	projectsLoading    bool
+	adding             bool
+	showAddAccount     bool
+	confirmRemoveEmail string
+	addEmail           string
 	oauthCode         string
 	oauth             appservice.OAuthStatusView
 	oauthPolling      bool
@@ -213,6 +218,7 @@ func (s *uiState) view(c *ui.Context) {
 					s.lang = langZH
 				}
 				s.mu.Unlock()
+				go s.savePrefs()
 			}
 		})
 
@@ -253,12 +259,8 @@ func (s *uiState) view(c *ui.Context) {
 		// Footer
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(2, 2, 0, 2).Children(func() {
 			ui.Text(c, s.tr("footer.sharedCli")).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Shrink(1)
-			if statusMsg != "" {
-				col := p.muted
-				if statusErr {
-					col = p.danger
-				}
-				ui.Text(c, statusMsg).FontSize(9.5).TextColor(col).Ellipsis("…").SingleLine()
+			if statusMsg != "" && !statusErr {
+				ui.Text(c, statusMsg).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
 			}
 		})
 	})
@@ -287,6 +289,11 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 	s.mu.Lock()
 	activeModel := s.currentAgyModel
 	refreshing := s.refreshing
+	showAdd := s.showAddAccount
+	oauthState := s.oauth.State
+	statusMsg := s.statusMsg
+	statusErr := s.statusErr
+	win := s.win
 	s.mu.Unlock()
 
 	summary := s.tr("summary.none")
@@ -309,6 +316,20 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 		}
 	})
 
+	if statusMsg != "" && statusErr {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(7, 10).Radius(9).Background(p.dangerSoft).Border(1, p.danger).Children(func() {
+			ui.Text(c, statusMsg).FontSize(10).TextColor(p.danger).Grow(1).Shrink(1)
+			if ui.ButtonBase(c).Padding(2).Radius(4).Cursor(ui.CursorPointer).Children(func() {
+				ui.Icon(c, closeSVG).Size(11, 11).TextColor(p.danger)
+			}).Clicked() {
+				s.mu.Lock()
+				s.statusMsg = ""
+				s.statusErr = false
+				s.mu.Unlock()
+			}
+		})
+	}
+
 	if len(items) > 0 {
 		ui.Scroll(c).FillWidth().Grow(1).Children(func() {
 			ui.Column(c).FillWidth().Gap(8).Children(func() {
@@ -319,7 +340,22 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 		})
 	}
 
-	s.renderOnboardingCard(c, p)
+	oauthActive := oauthState != "" && oauthState != "idle"
+	if len(items) == 0 || showAdd || oauthActive {
+		s.renderOnboardingCard(c, p, len(items) > 0)
+	} else {
+		if ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(10).Background(p.card).Border(1, p.line).Center().Cursor(ui.CursorPointer).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+				ui.Icon(c, plusSVG).Size(12, 12).TextColor(p.accent)
+				ui.Text(c, s.tr("account.addToggle")).FontSize(10.5).Bold().TextColor(p.fg)
+			})
+		}).Clicked() {
+			s.mu.Lock()
+			s.showAddAccount = true
+			s.mu.Unlock()
+			s.syncWindowHeight(win)
+		}
+	}
 }
 
 func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.AccountView) {
@@ -327,6 +363,7 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 	expanded := s.expandedAccounts[acc.Email]
 	cardRefreshing := s.refreshingEmails[acc.Email]
 	activeModel := s.currentAgyModel
+	confirmingRemove := s.confirmRemoveEmail == acc.Email
 	win := s.win
 	s.mu.Unlock()
 
@@ -339,28 +376,37 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 
 	ui.Column(c).Key(acc.Email).FillWidth().Padding(10, 11).Gap(8).Radius(12).Background(p.card).Border(borderW, borderCol).Children(func() {
 		// Card Header
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(7).Children(func() {
 			// Radio indicator
+			canSwitch := acc.Current || acc.HasSavedLogin
 			radioCol := p.line
+			radioCursor := ui.CursorPointer
 			if acc.Current {
 				radioCol = p.accent
+			} else if !canSwitch {
+				radioCol = p.track
+				radioCursor = ui.CursorDefault
 			}
-			radioBtn := ui.ButtonBase(c).Width(16).Height(16).Radius(8).Border(1.5, radioCol).Center().Cursor(ui.CursorPointer).Children(func() {
+			radioBtn := ui.ButtonBase(c).Width(16).Height(16).Radius(8).Border(1.5, radioCol).Center().Cursor(radioCursor).Disabled(!canSwitch).Children(func() {
 				if acc.Current {
 					ui.Box(c).Width(8).Height(8).Radius(4).Background(p.accent)
 				}
 			})
-			if radioBtn.Clicked() && !acc.Current && (acc.HasSavedLogin || acc.Current) {
+			if radioBtn.Clicked() && !acc.Current && acc.HasSavedLogin {
 				s.switchAccountAsync(win, acc.Email)
 			}
 
 			toggleClicked := false
-			titleRow := ui.Row(c).Grow(1).Shrink(1).AlignItems(ui.Center).Gap(6).Cursor(ui.CursorPointer).Children(func() {
+			titleRow := ui.Row(c).Grow(1).Shrink(1).AlignItems(ui.Center).Gap(5).Cursor(ui.CursorPointer).Children(func() {
 				ui.Text(c, acc.Email).FontSize(11.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 
 				if acc.Current {
-					ui.Box(c).Padding(2, 6).Radius(6).Background(p.accentSoft).Children(func() {
+					ui.Box(c).Padding(2, 6).Radius(999).Background(p.accentSoft).Children(func() {
 						ui.Text(c, s.tr("account.current")).FontSize(9.5).Bold().TextColor(p.accent)
+					})
+				} else if !acc.HasSavedLogin {
+					ui.Box(c).Padding(2, 6).Radius(999).Background(p.warnBg).Children(func() {
+						ui.Text(c, s.tr("account.needLogin")).FontSize(9.5).Bold().TextColor(p.warnText)
 					})
 				}
 				tierLabel := ""
@@ -368,7 +414,7 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 					tierLabel = formatTierLabel(acc.Quota.TierID, acc.Quota.TierName)
 				}
 				if tierLabel != "" {
-					ui.Box(c).Padding(2, 6).Radius(6).Background(p.soft).Children(func() {
+					ui.Box(c).Padding(2, 6).Radius(999).Background(p.soft).Children(func() {
 						ui.Text(c, tierLabel).FontSize(9.5).TextColor(p.muted)
 					})
 				}
@@ -377,12 +423,12 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 				toggleClicked = true
 			}
 
-			cardRefreshBtn := ui.ButtonBase(c).Padding(2, 6).Radius(6).Background(p.soft).Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
-				lbl := "↻"
+			cardRefreshBtn := ui.ButtonBase(c).Width(22).Height(22).Radius(6).Background(p.soft).Center().Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
 				if cardRefreshing {
-					lbl = "…"
+					ui.Text(c, "…").FontSize(10.5).Bold().TextColor(p.muted)
+				} else {
+					ui.Icon(c, refreshSVG).Size(11.5, 11.5).TextColor(p.muted)
 				}
-				ui.Text(c, lbl).FontSize(10.5).Bold().TextColor(p.muted)
 			})
 			if cardRefreshBtn.Clicked() {
 				s.refreshSingleAccountAsync(win, acc.Email)
@@ -400,6 +446,9 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 			if toggleClicked {
 				s.mu.Lock()
 				s.expandedAccounts[acc.Email] = !expanded
+				if s.confirmRemoveEmail == acc.Email {
+					s.confirmRemoveEmail = ""
+				}
 				s.mu.Unlock()
 			}
 		})
@@ -476,10 +525,32 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 					}
 
 					if !acc.Current {
-						if ui.ButtonBase(c).Padding(2, 7).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
-							ui.Text(c, s.tr("account.remove")).FontSize(9.5).Bold().TextColor(p.danger)
-						}).Clicked() {
-							s.removeAccountAsync(win, acc.Email)
+						if confirmingRemove {
+							ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
+								if ui.ButtonBase(c).Padding(3, 7).Radius(5).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
+									ui.Text(c, s.tr("account.cancelRemove")).FontSize(9.5).TextColor(p.muted)
+								}).Clicked() {
+									s.mu.Lock()
+									s.confirmRemoveEmail = ""
+									s.mu.Unlock()
+								}
+								if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.danger).Cursor(ui.CursorPointer).Children(func() {
+									ui.Text(c, s.tr("account.confirmRemove")).FontSize(9.5).Bold().TextColor(ui.RGB(255, 255, 255))
+								}).Clicked() {
+									s.mu.Lock()
+									s.confirmRemoveEmail = ""
+									s.mu.Unlock()
+									s.removeAccountAsync(win, acc.Email)
+								}
+							})
+						} else {
+							if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+								ui.Text(c, s.tr("account.remove")).FontSize(9.5).Bold().TextColor(p.danger)
+							}).Clicked() {
+								s.mu.Lock()
+								s.confirmRemoveEmail = acc.Email
+								s.mu.Unlock()
+							}
 						}
 					}
 				})
@@ -488,7 +559,7 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 	})
 }
 
-func (s *uiState) renderOnboardingCard(c *ui.Context, p palette) {
+func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible bool) {
 	s.mu.Lock()
 	email := s.addEmail
 	adding := s.adding
@@ -497,7 +568,23 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette) {
 	win := s.win
 	s.mu.Unlock()
 
+	oauthBusy := oauth.State == accounts.OAuthStateStarting || oauth.State == accounts.OAuthStateWaiting || oauth.State == accounts.OAuthStateAuthorize
+
 	ui.Column(c).FillWidth().Padding(10, 11).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
+		if collapsible && !oauthBusy {
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+				ui.Text(c, s.tr("account.addToggle")).FontSize(10.5).Bold().TextColor(p.fg)
+				if ui.ButtonBase(c).Padding(2, 6).Radius(5).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
+					ui.Text(c, s.tr("account.collapse")).FontSize(9.5).TextColor(p.muted)
+				}).Clicked() {
+					s.mu.Lock()
+					s.showAddAccount = false
+					s.mu.Unlock()
+					s.syncWindowHeight(win)
+				}
+			})
+		}
+
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
 			inp := ui.TextInput(c, &email).Placeholder(s.tr("account.addPlaceholder")).Grow(1).Shrink(1)
 			if email != s.addEmail {
@@ -513,7 +600,6 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette) {
 			}
 		})
 
-		oauthBusy := oauth.State == accounts.OAuthStateStarting || oauth.State == accounts.OAuthStateWaiting || oauth.State == accounts.OAuthStateAuthorize
 		if ui.ButtonBase(c).FillWidth().Padding(6, 10).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Disabled(oauthBusy).Center().Children(func() {
 			ui.Text(c, s.tr("account.oauthStart")).FontSize(10.5).Bold().TextColor(p.fg)
 		}).Clicked() {
@@ -875,6 +961,7 @@ func (s *uiState) addAccountAsync(win *mygo.Window, email string) {
 			s.statusErr = true
 		} else if added {
 			s.addEmail = ""
+			s.showAddAccount = false
 			s.expandedAccounts[email] = true
 			s.statusMsg = s.tr("status.added")
 			s.statusErr = false
@@ -927,6 +1014,7 @@ func (s *uiState) pollOAuthLoop(win *mygo.Window) {
 		if done {
 			s.oauthPolling = false
 			if view.State == "added" && view.Email != "" {
+				s.showAddAccount = false
 				s.expandedAccounts[view.Email] = true
 			}
 		}
@@ -1032,13 +1120,17 @@ func (s *uiState) loadPrefs() {
 		return
 	}
 	var payload struct {
-		Theme string `json:"theme,omitempty"`
+		Theme string   `json:"theme,omitempty"`
+		Lang  langCode `json:"lang,omitempty"`
 	}
 	if json.Unmarshal(raw, &payload) != nil {
 		return
 	}
 	s.mu.Lock()
 	s.theme = payload.Theme
+	if payload.Lang == langZH || payload.Lang == langEN {
+		s.lang = payload.Lang
+	}
 	s.mu.Unlock()
 }
 
@@ -1049,9 +1141,11 @@ func (s *uiState) savePrefs() {
 	}
 	s.mu.Lock()
 	payload := struct {
-		Theme string `json:"theme,omitempty"`
+		Theme string   `json:"theme,omitempty"`
+		Lang  langCode `json:"lang,omitempty"`
 	}{
 		Theme: s.theme,
+		Lang:  s.lang,
 	}
 	s.mu.Unlock()
 	data, err := json.MarshalIndent(payload, "", "  ")

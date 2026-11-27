@@ -50,4 +50,21 @@ func TestNativeUIRendersAccountsAndProjects(t *testing.T) {
 	if imgProjects == nil || imgProjects.Bounds().Empty() {
 		t.Fatal("expected non-empty rendered image for projects tab")
 	}
+
+	// Verify polished states: error banner, un-switchable account, confirm remove, expanded onboarding
+	state.tabIndex = 0
+	state.accounts = append(state.accounts, appservice.AccountView{
+		Email:         "secondary@example.com",
+		Current:       false,
+		HasSavedLogin: false,
+	})
+	state.expandedAccounts["secondary@example.com"] = true
+	state.confirmRemoveEmail = "secondary@example.com"
+	state.showAddAccount = true
+	state.statusMsg = "network timeout while refreshing quota"
+	state.statusErr = true
+	imgPolished := ui.Render(state.view, 396, 560, 1)
+	if imgPolished == nil || imgPolished.Bounds().Empty() {
+		t.Fatal("expected non-empty rendered image for polished accounts states")
+	}
 }

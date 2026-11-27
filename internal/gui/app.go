@@ -231,7 +231,7 @@ func (s *uiState) syncWindowHeight(win *mygo.Window) {
 		return
 	}
 	s.mu.Lock()
-	hasContent := len(s.accounts) > 0 || len(s.projects) > 0
+	hasContent := len(s.accounts) > 0 || len(s.projects) > 0 || s.showAddAccount || (s.oauth.State != "" && s.oauth.State != "idle")
 	targetH := 280
 	if hasContent {
 		targetH = 540
