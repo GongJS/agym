@@ -149,6 +149,7 @@ type uiState struct {
 	shortcutEnabled   bool
 	shortcutAccel     string
 	shortcutInput     string
+	shortcutRecording bool
 	registeredAccel   string
 }
 
@@ -1324,7 +1325,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 	curLang := s.lang
 	scEnabled := s.shortcutEnabled
 	scAccel := s.shortcutAccel
-	scInput := s.shortcutInput
+	scRecording := s.shortcutRecording
 	statusMsg := s.statusMsg
 	statusErr := s.statusErr
 	win := s.win
@@ -1419,74 +1420,82 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 			})
 
 			// Global Shortcut
-			ui.Column(c).FillWidth().Padding(12).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
-				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-					ui.Text(c, s.tr("settings.shortcut")).FontSize(11.5).Bold().TextColor(p.fg)
-					enabled := scEnabled
-					ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-						ui.Text(c, s.tr("settings.shortcutEnable")).FontSize(10).TextColor(p.muted)
-						ui.Switch(c, &enabled)
-					})
-					if enabled != scEnabled {
+			if scRecording {
+				mods := c.Modifiers()
+				keys := c.KeysDown()
+				for _, k := range keys {
+					if k == ui.KeyEscape {
 						s.mu.Lock()
-						s.shortcutEnabled = enabled
-						if !enabled {
-							s.statusMsg = s.tr("settings.shortcutOff")
-							s.statusErr = false
-						}
+						s.shortcutRecording = false
 						s.mu.Unlock()
+						scRecording = false
+						break
+					}
+					if accel, ok := buildShortcutAccel(mods, k); ok {
+						s.mu.Lock()
+						s.shortcutRecording = false
+						s.shortcutEnabled = true
+						s.shortcutAccel = accel
+						s.shortcutInput = accel
+						s.mu.Unlock()
+						scRecording = false
+						scEnabled = true
+						scAccel = accel
 						s.applyShortcut(win)
 						go s.savePrefs()
+						break
 					}
-				})
-				ui.Text(c, s.tr("settings.shortcutDesc")).FontSize(10).TextColor(p.muted)
+				}
+			}
 
-				presets := []string{"CommandOrControl+Shift+A", "Alt+Shift+A", "CommandOrControl+Shift+M"}
-				ui.Row(c).FillWidth().Wrap().Gap(5).Children(func() {
-					for _, preset := range presets {
-						active := scEnabled && scAccel == preset
-						bg := p.soft
-						fg := p.muted
-						if active {
-							bg = p.accentSoft
-							fg = p.accent
+			ui.Row(c).FillWidth().Padding(10, 12).Radius(12).Background(p.card).Border(1, p.line).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+				ui.Text(c, s.tr("settings.shortcut")).FontSize(11.5).TextColor(p.fg)
+
+				ui.Row(c).AlignItems(ui.Center).Gap(7).Children(func() {
+					pillBg := p.soft
+					pillBorder := p.line
+					pillFg := p.fg
+					pillLabel := s.tr("settings.shortcutRecord")
+					if scRecording {
+						pillBg = p.accentSoft
+						pillBorder = p.accent
+						pillFg = p.accent
+						if modPreview := formatModsSymbols(c.Modifiers()); modPreview != "" {
+							pillLabel = modPreview + "…"
+						} else {
+							pillLabel = s.tr("settings.shortcutListening")
 						}
-						if ui.ButtonBase(c).Padding(4, 8).Radius(999).Background(bg).Cursor(ui.CursorPointer).Children(func() {
-							txt := ui.Text(c, preset).FontSize(9.5).TextColor(fg)
-							if active {
-								txt.Bold()
-							}
-						}).Clicked() {
+					} else if scEnabled && scAccel != "" {
+						pillLabel = formatShortcutSymbols(scAccel)
+					} else {
+						pillFg = p.muted
+					}
+
+					recBtn := ui.ButtonBase(c).Width(116).Height(26).Radius(7).Background(pillBg).Border(1, pillBorder).Center().Cursor(ui.CursorPointer).Children(func() {
+						ui.Text(c, pillLabel).FontSize(10.5).Bold().TextColor(pillFg).Ellipsis("…").SingleLine()
+					})
+					if recBtn.Clicked() {
+						s.mu.Lock()
+						s.shortcutRecording = !scRecording
+						s.mu.Unlock()
+					}
+
+					if scEnabled && scAccel != "" {
+						clearBtn := ui.ButtonBase(c).Width(18).Height(18).Radius(9).Background(p.muted).Center().Cursor(ui.CursorPointer).Children(func() {
+							ui.Icon(c, closeSVG).Size(10, 10).TextColor(p.card)
+						})
+						if clearBtn.Clicked() {
 							s.mu.Lock()
-							s.shortcutEnabled = true
-							s.shortcutAccel = preset
-							s.shortcutInput = preset
+							s.shortcutRecording = false
+							s.shortcutEnabled = false
+							s.shortcutAccel = ""
+							s.shortcutInput = ""
+							s.statusMsg = s.tr("settings.shortcutOff")
+							s.statusErr = false
 							s.mu.Unlock()
 							s.applyShortcut(win)
 							go s.savePrefs()
 						}
-					}
-				})
-
-				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
-					inp := ui.TextInput(c, &scInput).Placeholder(s.tr("settings.shortcutPlaceholder")).Grow(1).Shrink(1)
-					if scInput != s.shortcutInput {
-						s.mu.Lock()
-						s.shortcutInput = scInput
-						s.mu.Unlock()
-					}
-					trimmed := strings.TrimSpace(scInput)
-					applyBtn := ui.ButtonBase(c).Padding(5, 11).Radius(7).Background(p.accent).Cursor(ui.CursorPointer).Disabled(trimmed == "").Children(func() {
-						ui.Text(c, s.tr("settings.shortcutApply")).FontSize(10.5).Bold().TextColor(ui.RGB(255, 255, 255))
-					})
-					if (applyBtn.Clicked() || inp.Submitted()) && trimmed != "" {
-						s.mu.Lock()
-						s.shortcutEnabled = true
-						s.shortcutAccel = trimmed
-						s.shortcutInput = trimmed
-						s.mu.Unlock()
-						s.applyShortcut(win)
-						go s.savePrefs()
 					}
 				})
 			})
@@ -1640,6 +1649,141 @@ func getContextArcSVG(pct int) *ui.SVG {
 	ringSVGCache[pct] = svg
 	ringSVGMu.Unlock()
 	return svg
+}
+
+func formatModsSymbols(mods ui.Modifiers) string {
+	var b strings.Builder
+	if mods&ui.Ctrl != 0 {
+		b.WriteString("⌃")
+	}
+	if mods&ui.Alt != 0 {
+		b.WriteString("⌥")
+	}
+	if mods&ui.Shift != 0 {
+		b.WriteString("⇧")
+	}
+	if mods&ui.Super != 0 {
+		b.WriteString("⌘")
+	}
+	return b.String()
+}
+
+func formatShortcutSymbols(accel string) string {
+	parts := strings.Split(accel, "+")
+	var hasCtrl, hasAlt, hasShift, hasCmd bool
+	var keyPart string
+	for _, raw := range parts {
+		tok := strings.TrimSpace(raw)
+		switch strings.ToLower(tok) {
+		case "control", "ctrl":
+			hasCtrl = true
+		case "alt", "option":
+			hasAlt = true
+		case "shift":
+			hasShift = true
+		case "command", "cmd", "super", "commandorcontrol", "cmdorctrl":
+			hasCmd = true
+		default:
+			if tok != "" {
+				keyPart = strings.ToUpper(tok)
+			}
+		}
+	}
+	var b strings.Builder
+	if hasCtrl {
+		b.WriteString("⌃")
+	}
+	if hasAlt {
+		b.WriteString("⌥")
+	}
+	if hasShift {
+		b.WriteString("⇧")
+	}
+	if hasCmd {
+		b.WriteString("⌘")
+	}
+	b.WriteString(keyPart)
+	return b.String()
+}
+
+func keyNameForAccel(k ui.Key) (string, bool) {
+	if k >= ui.KeyA && k <= ui.KeyZ {
+		return string(rune('A' + (k - ui.KeyA))), true
+	}
+	if k >= ui.Key0 && k <= ui.Key9 {
+		return string(rune('0' + (k - ui.Key0))), true
+	}
+	if k >= ui.KeyF1 && k <= ui.KeyF12 {
+		return fmt.Sprintf("F%d", 1+(k-ui.KeyF1)), true
+	}
+	switch k {
+	case ui.KeySpace:
+		return "Space", true
+	case ui.KeyEnter:
+		return "Enter", true
+	case ui.KeyTab:
+		return "Tab", true
+	case ui.KeyBackspace:
+		return "Backspace", true
+	case ui.KeyDelete:
+		return "Delete", true
+	case ui.KeyUp:
+		return "Up", true
+	case ui.KeyDown:
+		return "Down", true
+	case ui.KeyLeft:
+		return "Left", true
+	case ui.KeyRight:
+		return "Right", true
+	case ui.KeyMinus:
+		return "-", true
+	case ui.KeyEqual:
+		return "=", true
+	case ui.KeyComma:
+		return ",", true
+	case ui.KeyPeriod:
+		return ".", true
+	case ui.KeySlash:
+		return "/", true
+	case ui.KeySemicolon:
+		return ";", true
+	case ui.KeyBracketLeft:
+		return "[", true
+	case ui.KeyBracketRight:
+		return "]", true
+	case ui.KeyBackslash:
+		return "\\", true
+	case ui.KeyBackquote:
+		return "`", true
+	default:
+		return "", false
+	}
+}
+
+func buildShortcutAccel(mods ui.Modifiers, k ui.Key) (string, bool) {
+	keyName, ok := keyNameForAccel(k)
+	if !ok {
+		return "", false
+	}
+	isFnKey := k >= ui.KeyF1 && k <= ui.KeyF12
+	if mods == 0 && !isFnKey {
+		return "", false
+	}
+	var parts []string
+	if mods&ui.Ctrl != 0 {
+		parts = append(parts, "Control")
+	}
+	if mods&ui.Alt != 0 {
+		parts = append(parts, "Alt")
+	}
+	if mods&ui.Shift != 0 {
+		parts = append(parts, "Shift")
+	}
+	if mods&ui.Super != 0 {
+		parts = append(parts, "Command")
+	}
+	parts = append(parts, keyName)
+	return strings.Join(parts, "+"), true
 }
 
 func renderContextRing(c *ui.Context, p palette, pct int) {
