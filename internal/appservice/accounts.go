@@ -4,10 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -291,51 +288,6 @@ func (s *Accounts) RemoveAccount(email string) error {
 
 func (s *Accounts) SetRotation(email string, enabled bool) error {
 	return s.roster.SetRotation(email, enabled)
-}
-
-// SyncAgySettings updates the global ~/.gemini/antigravity-cli/settings.json
-// with the selected model display name and optional effort level while preserving
-// all other existing settings keys.
-func (s *Accounts) SyncAgySettings(modelName, effort string) error {
-	agyDir, err := projects.DefaultAgyDir()
-	if err != nil {
-		return err
-	}
-	return syncAgySettingsToPath(filepath.Join(agyDir, "settings.json"), modelName, effort)
-}
-
-func syncAgySettingsToPath(path, modelName, effort string) error {
-	settings := make(map[string]any)
-	if raw, err := os.ReadFile(path); err == nil {
-		if len(strings.TrimSpace(string(raw))) > 0 {
-			if unmarshalErr := json.Unmarshal(raw, &settings); unmarshalErr != nil {
-				return fmt.Errorf("parse agy settings: %w", unmarshalErr)
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	if m := strings.TrimSpace(modelName); m != "" {
-		settings["model"] = m
-	}
-	switch e := strings.ToLower(strings.TrimSpace(effort)); e {
-	case "":
-	case "default":
-		delete(settings, "effort")
-	default:
-		settings["effort"] = e
-	}
-
-	data, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o600)
 }
 
 func (s *Accounts) accountViews(ctx context.Context, refresh bool) ([]AccountView, error) {

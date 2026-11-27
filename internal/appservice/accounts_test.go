@@ -167,37 +167,3 @@ func TestRosterMutationsViaAppService(t *testing.T) {
 		t.Fatalf("after RemoveAccount(), len(views) = %d, want 0", len(views))
 	}
 }
-
-func TestSyncAgySettingsPreservesExistingKeys(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-	initial := "{\n  \"allowNonWorkspaceAccess\": true,\n  \"effort\": \"high\",\n  \"model\": \"Gemini 4 Hydrogen (Medium)\"\n}\n"
-	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := syncAgySettingsToPath(path, "Claude Sonnet 4.6 (Thinking)", "medium"); err != nil {
-		t.Fatalf("syncAgySettingsToPath() error = %v", err)
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(raw)
-	if !strings.Contains(got, `"allowNonWorkspaceAccess": true`) ||
-		!strings.Contains(got, `"model": "Claude Sonnet 4.6 (Thinking)"`) ||
-		!strings.Contains(got, `"effort": "medium"`) {
-		t.Fatalf("unexpected settings.json content:\n%s", got)
-	}
-
-	if err := syncAgySettingsToPath(path, "Gemini 4 Hydrogen (High)", "default"); err != nil {
-		t.Fatalf("syncAgySettingsToPath(default) error = %v", err)
-	}
-	raw, err = os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(raw), `"effort"`) {
-		t.Fatalf("expected effort key to be removed for default, got:\n%s", string(raw))
-	}
-}

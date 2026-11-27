@@ -130,8 +130,6 @@ type uiState struct {
 	statusMsg         string
 	statusErr         bool
 	lastWindowHeight  int
-	modelPrefs        map[string]string
-	thinkingPrefs     map[string]string
 }
 
 func newUIState(svc *appservice.Accounts) *uiState {
@@ -141,8 +139,6 @@ func newUIState(svc *appservice.Accounts) *uiState {
 		expandedAccounts: make(map[string]bool),
 		expandedProjects: make(map[string]bool),
 		refreshingEmails: make(map[string]bool),
-		modelPrefs:       make(map[string]string),
-		thinkingPrefs:    make(map[string]string),
 	}
 	s.loadPrefs()
 	return s
@@ -446,8 +442,6 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 						})
 					}
 				}
-
-				s.renderAccountSelectors(c, p, acc)
 
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Padding(4, 0, 0, 0).Children(func() {
 					rot := acc.Rotation
@@ -766,9 +760,6 @@ func (s *uiState) switchAccountAsync(win *mygo.Window, email string) {
 			s.statusErr = false
 		}
 		s.mu.Unlock()
-		if err == nil {
-			s.syncAccountSettings(email)
-		}
 		s.loadAccountsAsync(win, false)
 	}()
 }
@@ -978,187 +969,6 @@ func (s *uiState) removeProjectAsync(win *mygo.Window, path string) {
 	}()
 }
 
-func (s *uiState) renderAccountSelectors(c *ui.Context, p palette, acc appservice.AccountView) {
-	s.mu.Lock()
-	savedModel := s.modelPrefs[acc.Email]
-	savedThinking := s.thinkingPrefs[acc.Email]
-	win := s.win
-	s.mu.Unlock()
-
-	if savedModel == "" {
-		savedModel = acc.DefaultModel
-	}
-	if savedThinking == "" {
-		savedThinking = "default"
-	}
-
-	selectedModelName := ""
-	showThinking := false
-	for _, m := range acc.AvailableModels {
-		if m.ID == savedModel {
-			selectedModelName = m.Name
-			showThinking = modelSupportsEffort(m.ID, m.Name)
-			break
-		}
-	}
-
-	ui.Row(c).FillWidth().Gap(6).Padding(2, 0, 0, 0).Children(func() {
-		// Model selector
-		if !acc.ModelsKnown || len(acc.AvailableModels) == 0 {
-			emptyLabel := s.tr("model.empty")
-			ui.Select(c, &emptyLabel, []string{emptyLabel}).Grow(1).Shrink(1).Disabled(true)
-		} else {
-			labels := make([]string, 0, len(acc.AvailableModels))
-			labelToID := make(map[string]string, len(acc.AvailableModels))
-			labelToName := make(map[string]string, len(acc.AvailableModels))
-			selectedLabel := ""
-			for _, m := range acc.AvailableModels {
-				label := m.Name
-				if m.Tag != "" {
-					label += " · " + m.Tag
-				} else if m.ID == acc.DefaultModel {
-					label += " · " + s.tr("model.defaultTag")
-				}
-				labels = append(labels, label)
-				labelToID[label] = m.ID
-				labelToName[label] = m.Name
-				if m.ID == savedModel {
-					selectedLabel = label
-				}
-			}
-			if selectedLabel == "" && len(labels) > 0 {
-				selectedLabel = labels[0]
-				selectedModelName = acc.AvailableModels[0].Name
-				showThinking = modelSupportsEffort(acc.AvailableModels[0].ID, acc.AvailableModels[0].Name)
-			}
-			prevLabel := selectedLabel
-			ui.Select(c, &selectedLabel, labels).Grow(1).Shrink(1)
-			if selectedLabel != prevLabel {
-				if nextID, ok := labelToID[selectedLabel]; ok {
-					nextName := labelToName[selectedLabel]
-					s.mu.Lock()
-					s.modelPrefs[acc.Email] = nextID
-					s.statusMsg = s.tr("status.modelSaved", acc.Email)
-					s.statusErr = false
-					s.mu.Unlock()
-					go func(email, modelName, effort string, isCurrent bool) {
-						s.savePrefs()
-						if isCurrent && s.svc != nil {
-							effortArg := ""
-							if modelSupportsEffort(nextID, modelName) {
-								effortArg = effort
-							}
-							if err := s.svc.SyncAgySettings(modelName, effortArg); err == nil {
-								s.mu.Lock()
-								s.statusMsg = s.tr("status.agySynced")
-								s.statusErr = false
-								s.mu.Unlock()
-								s.triggerUpdate(win)
-							}
-						}
-					}(acc.Email, nextName, savedThinking, acc.Current)
-				}
-			}
-		}
-
-		// Thinking level selector (shown only when selected model supports separate effort)
-		if showThinking {
-			levels := []string{"default", "low", "medium", "high"}
-			thinkLabels := make([]string, 0, len(levels))
-			thinkLabelToKey := make(map[string]string, len(levels))
-			selectedThink := ""
-			for _, lv := range levels {
-				lbl := s.tr("thinking." + lv)
-				thinkLabels = append(thinkLabels, lbl)
-				thinkLabelToKey[lbl] = lv
-				if lv == savedThinking {
-					selectedThink = lbl
-				}
-			}
-			if selectedThink == "" {
-				selectedThink = thinkLabels[0]
-			}
-			prevThink := selectedThink
-			ui.Select(c, &selectedThink, thinkLabels).Width(116)
-			if selectedThink != prevThink {
-				if nextLv, ok := thinkLabelToKey[selectedThink]; ok {
-					s.mu.Lock()
-					s.thinkingPrefs[acc.Email] = nextLv
-					s.statusMsg = s.tr("status.thinkingSaved", acc.Email)
-					s.statusErr = false
-					s.mu.Unlock()
-					go func(modelName, effort string, isCurrent bool) {
-						s.savePrefs()
-						if isCurrent && s.svc != nil {
-							if err := s.svc.SyncAgySettings(modelName, effort); err == nil {
-								s.mu.Lock()
-								s.statusMsg = s.tr("status.agySynced")
-								s.statusErr = false
-								s.mu.Unlock()
-								s.triggerUpdate(win)
-							}
-						}
-					}(selectedModelName, nextLv, acc.Current)
-				}
-			}
-		}
-	})
-}
-
-func (s *uiState) syncAccountSettings(email string) {
-	if s.svc == nil {
-		return
-	}
-	s.mu.Lock()
-	modelID := s.modelPrefs[email]
-	effort := s.thinkingPrefs[email]
-	var modelName string
-	for _, a := range s.accounts {
-		if a.Email != email {
-			continue
-		}
-		if modelID == "" {
-			modelID = a.DefaultModel
-		}
-		for _, m := range a.AvailableModels {
-			if m.ID == modelID {
-				modelName = m.Name
-				break
-			}
-		}
-		break
-	}
-	s.mu.Unlock()
-
-	if modelName == "" {
-		return
-	}
-	effortArg := ""
-	if modelSupportsEffort(modelID, modelName) {
-		effortArg = effort
-	}
-	_ = s.svc.SyncAgySettings(modelName, effortArg)
-}
-
-func modelSupportsEffort(modelID, modelName string) bool {
-	id := strings.ToLower(strings.TrimSpace(modelID))
-	name := strings.ToLower(strings.TrimSpace(modelName))
-	if id == "" && name == "" {
-		return false
-	}
-	for _, suffix := range []string{"-low", "-medium", "-high", "-xhigh", "-max"} {
-		if strings.HasSuffix(id, suffix) {
-			return false
-		}
-	}
-	for _, tag := range []string{"(low)", "(medium)", "(high)", "(xhigh)", "(max)"} {
-		if strings.Contains(name, tag) {
-			return false
-		}
-	}
-	return true
-}
-
 func uiPrefsPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -1200,21 +1010,13 @@ func (s *uiState) loadPrefs() {
 		return
 	}
 	var payload struct {
-		Theme    string            `json:"theme,omitempty"`
-		Models   map[string]string `json:"models"`
-		Thinking map[string]string `json:"thinking"`
+		Theme string `json:"theme,omitempty"`
 	}
 	if json.Unmarshal(raw, &payload) != nil {
 		return
 	}
 	s.mu.Lock()
 	s.theme = payload.Theme
-	for k, v := range payload.Models {
-		s.modelPrefs[k] = v
-	}
-	for k, v := range payload.Thinking {
-		s.thinkingPrefs[k] = v
-	}
 	s.mu.Unlock()
 }
 
@@ -1225,19 +1027,9 @@ func (s *uiState) savePrefs() {
 	}
 	s.mu.Lock()
 	payload := struct {
-		Theme    string            `json:"theme,omitempty"`
-		Models   map[string]string `json:"models"`
-		Thinking map[string]string `json:"thinking"`
+		Theme string `json:"theme,omitempty"`
 	}{
-		Theme:    s.theme,
-		Models:   make(map[string]string, len(s.modelPrefs)),
-		Thinking: make(map[string]string, len(s.thinkingPrefs)),
-	}
-	for k, v := range s.modelPrefs {
-		payload.Models[k] = v
-	}
-	for k, v := range s.thinkingPrefs {
-		payload.Thinking[k] = v
+		Theme: s.theme,
 	}
 	s.mu.Unlock()
 	data, err := json.MarshalIndent(payload, "", "  ")
