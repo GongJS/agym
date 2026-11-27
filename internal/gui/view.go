@@ -94,8 +94,10 @@ func currentPalette(c *ui.Context) palette {
 }
 
 var (
-	sunSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`))
-	moonSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`))
+	sunSVG          = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`))
+	moonSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`))
+	chevronRightSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))
+	chevronDownSVG  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`))
 )
 
 type uiState struct {
@@ -378,12 +380,12 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 				s.refreshSingleAccountAsync(win, acc.Email)
 			}
 
-			chev := "▸"
+			chevIcon := chevronRightSVG
 			if expanded {
-				chev = "▾"
+				chevIcon = chevronDownSVG
 			}
-			if ui.ButtonBase(c).Padding(2, 4).Radius(5).Cursor(ui.CursorPointer).Children(func() {
-				ui.Text(c, chev).FontSize(11).TextColor(p.muted)
+			if ui.ButtonBase(c).Padding(4).Radius(5).Cursor(ui.CursorPointer).Children(func() {
+				ui.Icon(c, chevIcon).Size(12, 12).TextColor(p.muted)
 			}).Clicked() {
 				toggleClicked = true
 			}
@@ -612,11 +614,11 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 				ui.Box(c).Padding(2, 6).Radius(999).Background(p.soft).Border(1, p.line).Children(func() {
 					ui.Text(c, modelText).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
 				})
-				chev := "▸"
+				chevIcon := chevronRightSVG
 				if expanded {
-					chev = "▾"
+					chevIcon = chevronDownSVG
 				}
-				ui.Text(c, chev).FontSize(11).TextColor(p.muted)
+				ui.Icon(c, chevIcon).Size(12, 12).TextColor(p.muted)
 			})
 
 			pathBtn := ui.ButtonBase(c).FillWidth().Justify(ui.Start).Cursor(ui.CursorPointer).Children(func() {
