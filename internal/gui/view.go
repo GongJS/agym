@@ -15,6 +15,7 @@ import (
 	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/appservice"
 	"github.com/gongjs/agym/internal/projects"
+	"github.com/gongjs/agym/internal/usage"
 )
 
 type palette struct {
@@ -110,6 +111,7 @@ type uiState struct {
 	theme             string
 	tabIndex          int
 	accounts          []appservice.AccountView
+	currentAgyModel   string
 	projects          []projects.ProjectView
 	expandedAccounts  map[string]bool
 	expandedProjects  map[string]bool
@@ -282,6 +284,11 @@ func (s *uiState) switchTab(next int) {
 }
 
 func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice.AccountView) {
+	s.mu.Lock()
+	activeModel := s.currentAgyModel
+	refreshing := s.refreshing
+	s.mu.Unlock()
+
 	summary := s.tr("summary.none")
 	for _, a := range items {
 		if a.Current {
@@ -289,14 +296,18 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 			break
 		}
 	}
-	if len(items) == 0 {
-		s.mu.Lock()
-		if s.refreshing {
-			summary = s.tr("summary.refreshing")
-		}
-		s.mu.Unlock()
+	if len(items) == 0 && refreshing {
+		summary = s.tr("summary.refreshing")
 	}
-	ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine()
+	ui.Column(c).FillWidth().Gap(3).Children(func() {
+		ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine()
+		if activeModel != "" && len(items) > 0 {
+			ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
+				ui.Box(c).Width(6).Height(6).Radius(3).Background(p.accent)
+				ui.Text(c, s.tr("summary.model", activeModel)).FontSize(10).TextColor(p.muted).Ellipsis("…").SingleLine()
+			})
+		}
+	})
 
 	if len(items) > 0 {
 		ui.Scroll(c).FillWidth().Grow(1).Children(func() {
@@ -315,6 +326,7 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 	s.mu.Lock()
 	expanded := s.expandedAccounts[acc.Email]
 	cardRefreshing := s.refreshingEmails[acc.Email]
+	activeModel := s.currentAgyModel
 	win := s.win
 	s.mu.Unlock()
 
@@ -393,18 +405,53 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 		})
 
 		if expanded {
-			ui.Column(c).FillWidth().Gap(7).Padding(8, 9).Radius(9).Background(p.cardSub).Border(1, p.line).Children(func() {
+			ui.Column(c).FillWidth().Gap(9).Padding(9, 10).Radius(9).Background(p.cardSub).Border(1, p.line).Children(func() {
 				if acc.Quota == nil || len(acc.Quota.Buckets) == 0 {
 					ui.Text(c, s.tr("account.noQuota")).FontSize(10).TextColor(p.muted)
 				} else {
-					preferred := []string{"g5", "gw", "c5", "cw"}
+					type quotaGroupSpec struct {
+						title   string
+						members []string
+						keys    []string
+					}
+					groups := []quotaGroupSpec{
+						{
+							title:   s.tr("quota.group.gemini"),
+							members: acc.Quota.Members["gemini"],
+							keys:    []string{"g5", "gw"},
+						},
+						{
+							title:   s.tr("quota.group.claude"),
+							members: acc.Quota.Members["claude"],
+							keys:    []string{"c5", "cw"},
+						},
+					}
 					seen := make(map[string]bool, len(acc.Quota.Buckets))
-					keys := make([]string, 0, len(acc.Quota.Buckets))
-					for _, k := range preferred {
-						if _, ok := acc.Quota.Buckets[k]; ok {
-							keys = append(keys, k)
-							seen[k] = true
+					renderedGroups := 0
+					for _, grp := range groups {
+						var activeKeys []string
+						for _, k := range grp.keys {
+							if _, ok := acc.Quota.Buckets[k]; ok {
+								activeKeys = append(activeKeys, k)
+								seen[k] = true
+							}
 						}
+						if len(activeKeys) == 0 && len(grp.members) == 0 {
+							continue
+						}
+						if renderedGroups > 0 {
+							ui.Divider(c)
+						}
+						renderedGroups++
+						ui.Column(c).FillWidth().Gap(5).Children(func() {
+							ui.Text(c, grp.title).FontSize(10.5).Bold().TextColor(p.fg)
+							if len(grp.members) > 0 {
+								renderModelTags(c, p, grp.members, acc.Current, activeModel)
+							}
+							for _, k := range activeKeys {
+								s.renderQuotaBar(c, p, k, acc.Quota.Buckets[k])
+							}
+						})
 					}
 					var extra []string
 					for k := range acc.Quota.Buckets {
@@ -413,33 +460,8 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 						}
 					}
 					sort.Strings(extra)
-					keys = append(keys, extra...)
-
-					for _, k := range keys {
-						b := acc.Quota.Buckets[k]
-						pct := b.Percent
-						if pct < 0 {
-							pct = 0
-						}
-						if pct > 100 {
-							pct = 100
-						}
-						barColor := ui.Hex(quotaColorHex(pct))
-						ui.Column(c).FillWidth().Gap(3).Children(func() {
-							ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-								ui.Text(c, s.bucketLabel(k)).FontSize(10).TextColor(p.fg)
-								rightText := formatPctInt(pct)
-								if resetText := s.formatResetCountdown(pct, b.Reset); resetText != "" {
-									rightText = rightText + " · " + resetText
-								}
-								ui.Text(c, rightText).FontSize(9.5).TextColor(p.muted)
-							})
-							ui.Box(c).FillWidth().Height(5).Radius(999).Background(p.track).Children(func() {
-								if pct > 0 {
-									ui.Box(c).WidthPercent(float32(pct)).Height(5).Radius(999).Background(barColor)
-								}
-							})
-						})
+					for _, k := range extra {
+						s.renderQuotaBar(c, p, k, acc.Quota.Buckets[k])
 					}
 				}
 
@@ -1038,6 +1060,57 @@ func (s *uiState) savePrefs() {
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	_ = os.WriteFile(path, data, 0o600)
+}
+
+func (s *uiState) renderQuotaBar(c *ui.Context, p palette, key string, b usage.Bucket) {
+	pct := b.Percent
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	barColor := ui.Hex(quotaColorHex(pct))
+	ui.Column(c).FillWidth().Gap(3).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+			ui.Text(c, s.bucketLabel(key)).FontSize(10).TextColor(p.fg)
+			rightText := formatPctInt(pct)
+			if resetText := s.formatResetCountdown(pct, b.Reset); resetText != "" {
+				rightText = rightText + " · " + resetText
+			}
+			ui.Text(c, rightText).FontSize(9.5).TextColor(p.muted)
+		})
+		ui.Box(c).FillWidth().Height(5).Radius(999).Background(p.track).Children(func() {
+			if pct > 0 {
+				ui.Box(c).WidthPercent(float32(pct)).Height(5).Radius(999).Background(barColor)
+			}
+		})
+	})
+}
+
+func renderModelTags(c *ui.Context, p palette, members []string, isCurrent bool, activeModel string) {
+	activeLower := strings.ToLower(strings.TrimSpace(activeModel))
+	ui.Row(c).FillWidth().Wrap().Gap(4).Children(func() {
+		for _, m := range members {
+			name := strings.TrimSpace(m)
+			if name == "" {
+				continue
+			}
+			isSelected := isCurrent && activeLower != "" && strings.Contains(activeLower, strings.ToLower(name))
+			bg := p.soft
+			fg := p.muted
+			if isSelected {
+				bg = p.accentSoft
+				fg = p.accent
+			}
+			ui.Box(c).Padding(2, 6).Radius(5).Background(bg).Children(func() {
+				txt := ui.Text(c, name).FontSize(9.2).TextColor(fg)
+				if isSelected {
+					txt.Bold()
+				}
+			})
+		}
+	})
 }
 
 func formatTierLabel(tierID, tierName string) string {

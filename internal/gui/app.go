@@ -3,6 +3,10 @@ package gui
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -257,11 +261,13 @@ func (s *uiState) loadAccountsAsync(win *mygo.Window, showRefreshed bool) {
 	s.mu.Unlock()
 	go func() {
 		items, err := s.svc.ListAccounts()
+		activeModel := readCurrentAgyModel()
 		s.mu.Lock()
 		if s.switching || s.switchGen != gen {
 			s.mu.Unlock()
 			return
 		}
+		s.currentAgyModel = activeModel
 		if err != nil {
 			s.statusMsg = err.Error()
 			s.statusErr = true
@@ -304,10 +310,12 @@ func (s *uiState) refreshQuotasBackgroundAsync(win *mygo.Window) {
 
 	go func() {
 		items, err := s.svc.RefreshQuotas()
+		activeModel := readCurrentAgyModel()
 		s.mu.Lock()
 		s.refreshing = false
 		if err == nil && !s.switching && s.switchGen == gen {
 			s.accounts = items
+			s.currentAgyModel = activeModel
 		}
 		s.mu.Unlock()
 		if err == nil {
@@ -457,6 +465,24 @@ func (s *uiState) pollExistingProjects(win *mygo.Window) {
 	s.projects = updated
 	s.mu.Unlock()
 	s.triggerUpdate(win)
+}
+
+func readCurrentAgyModel() string {
+	agyDir, err := projects.DefaultAgyDir()
+	if err != nil {
+		return ""
+	}
+	raw, err := os.ReadFile(filepath.Join(agyDir, "settings.json"))
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		Model string `json:"model"`
+	}
+	if json.Unmarshal(raw, &cfg) != nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Model)
 }
 
 func (s *uiState) applyProjectListLocked(items []projects.ProjectView) {
