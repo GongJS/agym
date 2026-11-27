@@ -42,11 +42,21 @@
 
 ## 安装
 
-### 一键脚本安装（`curl`）
+### 一键脚本安装
+
+macOS：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GongJS/agym/main/install.sh | sh
 ```
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/GongJS/agym/main/install.ps1 | iex"
+```
+
+安装脚本会自动将 `agym` 加入 `PATH` 环境变量。
 
 ### 从源码编译
 

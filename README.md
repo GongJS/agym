@@ -42,11 +42,21 @@ Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) nat
 
 ## Installation
 
-### Quick Install (`curl`)
+### Quick Install
+
+macOS:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GongJS/agym/main/install.sh | sh
 ```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/GongJS/agym/main/install.ps1 | iex"
+```
+
+Both installers automatically configure `PATH` for `agym`.
 
 ### From Source
 
