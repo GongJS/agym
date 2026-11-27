@@ -84,8 +84,14 @@ func TestNativeUIRendersAccountsAndProjects(t *testing.T) {
 	state.showAddAccount = true
 	state.statusMsg = "network timeout while refreshing quota"
 	state.statusErr = true
-	imgPolished := ui.Render(state.view, 396, 560, 1)
+	imgPolished := ui.Render(state.view, 700, 520, 1)
 	if imgPolished == nil || imgPolished.Bounds().Empty() {
 		t.Fatal("expected non-empty rendered image for polished accounts states")
+	}
+
+	state.tabIndex = 2
+	imgSettings := ui.Render(state.view, 700, 520, 1)
+	if imgSettings == nil || imgSettings.Bounds().Empty() {
+		t.Fatal("expected non-empty rendered image for settings tab")
 	}
 }

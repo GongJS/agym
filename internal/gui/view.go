@@ -102,6 +102,9 @@ var (
 	refreshSVG      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`))
 	plusSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`))
 	closeSVG        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`))
+	accountsSVG     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`))
+	projectsSVG     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>`))
+	settingsSVG     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`))
 )
 
 type uiState struct {
@@ -138,7 +141,10 @@ type uiState struct {
 	oauthPolling      bool
 	statusMsg         string
 	statusErr         bool
-	lastWindowHeight  int
+	shortcutEnabled   bool
+	shortcutAccel     string
+	shortcutInput     string
+	registeredAccel   string
 }
 
 func newUIState(svc *appservice.Accounts) *uiState {
@@ -149,6 +155,9 @@ func newUIState(svc *appservice.Accounts) *uiState {
 		expandedProjects: make(map[string]bool),
 		refreshingEmails: make(map[string]bool),
 		rotationBusy:     make(map[string]bool),
+		shortcutEnabled:  true,
+		shortcutAccel:    "CommandOrControl+Shift+A",
+		shortcutInput:    "CommandOrControl+Shift+A",
 	}
 	s.loadPrefs()
 	return s
@@ -180,6 +189,7 @@ func (s *uiState) view(c *ui.Context) {
 	tabIdx := s.tabIndex
 	accountsCopy := append([]appservice.AccountView(nil), s.accounts...)
 	projectsCopy := append([]projects.ProjectView(nil), s.projects...)
+	activeModel := s.currentAgyModel
 	statusMsg := s.statusMsg
 	statusErr := s.statusErr
 	s.mu.Unlock()
@@ -190,106 +200,150 @@ func (s *uiState) view(c *ui.Context) {
 		c.SetTheme(ui.LightTheme())
 	}
 	p := currentPalette(c)
-	isDark := c.Theme().Background.R < 128
 
-	root := ui.Column(c).Fill().Padding(12).Gap(10)
-	if !c.Vibrancy() {
-		root = root.Background(p.bg)
+	activeEmail := ""
+	for _, a := range accountsCopy {
+		if a.Current {
+			activeEmail = a.Email
+			break
+		}
 	}
-	root.Children(func() {
-		// Header (respects native title bar controls and supports dragging)
-		bar := c.TitleBar()
-		headerH := float32(30)
-		if bar.Height > headerH {
-			headerH = bar.Height
-		}
-		ui.Row(c).FillWidth().Height(headerH).Padding(0, bar.Right, 0, bar.Left).AlignItems(ui.Center).Gap(6).DragWindow().Children(func() {
-			ui.Box(c).Width(24).Height(24).Radius(7).Background(p.accent).Center().Children(func() {
-				ui.Text(c, "A").FontSize(12).Bold().TextColor(ui.RGB(255, 255, 255))
-			})
-			ui.Text(c, s.tr("app.title")).FontSize(13.5).Bold().TextColor(p.fg).Grow(1)
+	if activeEmail == "" && len(accountsCopy) > 0 {
+		activeEmail = accountsCopy[0].Email
+	}
 
-			// Sun / Moon theme toggle pill
-			ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(2).Radius(999).Background(p.soft).Children(func() {
-				sunBtn := ui.ButtonBase(c).Width(24).Height(24).Radius(12).Center().Cursor(ui.CursorPointer)
-				sunCol := p.muted
-				if !isDark {
-					sunBtn = sunBtn.Background(p.pillBg)
-					sunCol = p.fg
-				}
-				if sunBtn.Children(func() {
-					ui.Icon(c, sunSVG).Size(13, 13).TextColor(sunCol)
-				}).Clicked() {
-					s.setThemeMode("light")
-				}
+	bar := c.TitleBar()
+	sidebarTopPad := float32(14)
+	if bar.Bottom > 0 {
+		sidebarTopPad = bar.Bottom + 10
+	}
+	headerH := float32(42)
+	if bar.Height > headerH {
+		headerH = bar.Height
+	}
 
-				moonBtn := ui.ButtonBase(c).Width(24).Height(24).Radius(12).Center().Cursor(ui.CursorPointer)
-				moonCol := p.muted
-				if isDark {
-					moonBtn = moonBtn.Background(p.pillBg)
-					moonCol = p.fg
-				}
-				if moonBtn.Children(func() {
-					ui.Icon(c, moonSVG).Size(12, 12).TextColor(moonCol)
-				}).Clicked() {
-					s.setThemeMode("dark")
-				}
+	ui.Row(c).Fill().Children(func() {
+		// Left Sidebar
+		ui.Column(c).Width(188).FillHeight().Background(p.cardSub).Padding(sidebarTopPad, 10, 10, 10).Gap(10).Children(func() {
+			// Brand header (draggable)
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(7).Padding(2, 4).DragWindow().Children(func() {
+				ui.Box(c).Width(22).Height(22).Radius(6).Background(p.accent).Center().Children(func() {
+					ui.Text(c, "A").FontSize(11.5).Bold().TextColor(ui.RGB(255, 255, 255))
+				})
+				ui.Text(c, s.tr("app.title")).FontSize(13).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 			})
 
-			if ui.ButtonBase(c).Padding(4, 8).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
-				ui.Text(c, s.tr("lang.toggle")).FontSize(10.5).Bold().TextColor(p.fg)
+			// Navigation
+			type navItem struct {
+				idx   int
+				label string
+				icon  *ui.SVG
+			}
+			navs := []navItem{
+				{0, s.tr("tab.accounts"), accountsSVG},
+				{1, s.tr("tab.projects"), projectsSVG},
+				{2, s.tr("tab.settings"), settingsSVG},
+			}
+			ui.Column(c).FillWidth().Gap(3).Children(func() {
+				for _, item := range navs {
+					active := item.idx == tabIdx
+					btn := ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(8).Cursor(ui.CursorPointer)
+					if active {
+						btn = btn.Background(p.accentSoft)
+					}
+					if btn.Children(func() {
+						col := p.muted
+						if active {
+							col = p.accent
+						}
+						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+							ui.Icon(c, item.icon).Size(14, 14).TextColor(col)
+							txt := ui.Text(c, item.label).FontSize(11.5).TextColor(col)
+							if active {
+								txt.Bold()
+							}
+						})
+					}).Clicked() && !active {
+						s.switchTab(item.idx)
+					}
+				}
+			})
+
+			ui.Box(c).Grow(1)
+
+			// Bottom-left active account card
+			if ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(10).Background(p.card).Border(1, p.line).Cursor(ui.CursorPointer).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+					initial := "?"
+					if activeEmail != "" {
+						initial = strings.ToUpper(activeEmail[:1])
+					}
+					ui.Box(c).Width(28).Height(28).Radius(14).Background(p.accentSoft).Center().Children(func() {
+						ui.Text(c, initial).FontSize(12).Bold().TextColor(p.accent)
+					})
+					ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
+						emailLabel := activeEmail
+						if emailLabel == "" {
+							emailLabel = s.tr("sidebar.noAccount")
+						}
+						ui.Text(c, emailLabel).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
+						modelLabel := activeModel
+						if modelLabel == "" {
+							modelLabel = s.tr("sidebar.noModel")
+						}
+						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
+							dotCol := p.muted
+							if activeEmail != "" {
+								dotCol = p.ok
+							}
+							ui.Box(c).Width(5).Height(5).Radius(3).Background(dotCol)
+							ui.Text(c, modelLabel).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+						})
+					})
+				})
 			}).Clicked() {
-				s.mu.Lock()
-				if s.lang == langZH {
-					s.lang = langEN
-				} else {
-					s.lang = langZH
-				}
-				s.mu.Unlock()
-				go s.savePrefs()
+				s.switchTab(0)
 			}
 		})
 
-		// Tabs (50/50 segmented bar)
-		ui.Row(c).FillWidth().Padding(3).Gap(3).Radius(10).Background(p.soft).Border(1, p.line).Children(func() {
-			tabs := []string{s.tr("tab.accounts"), s.tr("tab.projects")}
-			for i, label := range tabs {
-				active := i == tabIdx
-				btn := ui.ButtonBase(c).Grow(1).Padding(6, 0).Radius(8).Center().Cursor(ui.CursorPointer)
-				if active {
-					btn = btn.Background(p.pillBg)
-				}
-				if btn.Children(func() {
-					txtCol := p.muted
-					if active {
-						txtCol = p.pillText
-					}
-					t := ui.Text(c, label).FontSize(11).TextColor(txtCol)
-					if active {
-						t.Bold()
-					}
-				}).Clicked() && !active {
-					s.switchTab(i)
-				}
-			}
-		})
+		// Vertical divider
+		ui.Box(c).Width(1).FillHeight().Background(p.line)
 
-		if tabIdx == 0 {
-			ui.Column(c).FillWidth().Grow(1).Gap(8).Children(func() {
-				s.renderAccountsTab(c, p, accountsCopy)
-			})
-		} else {
-			ui.Column(c).FillWidth().Grow(1).Gap(8).Children(func() {
-				s.renderProjectsTab(c, p, projectsCopy)
-			})
+		// Right Content Area
+		content := ui.Column(c).Grow(1).Shrink(1).FillHeight()
+		if !c.Vibrancy() {
+			content = content.Background(p.bg)
 		}
-
-		// Footer
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(2, 2, 0, 2).Children(func() {
-			ui.Text(c, s.tr("footer.sharedCli")).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Shrink(1)
-			if statusMsg != "" && !statusErr {
-				ui.Text(c, statusMsg).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
+		content.Children(func() {
+			// Section header (draggable, clears Windows/Linux top-right buttons if present)
+			sectionTitle := s.tr("tab.accounts")
+			if tabIdx == 1 {
+				sectionTitle = s.tr("tab.projects")
+			} else if tabIdx == 2 {
+				sectionTitle = s.tr("tab.settings")
 			}
+			ui.Row(c).FillWidth().Height(headerH).Padding(0, maxFloat(16, bar.Right+8), 0, 16).AlignItems(ui.Center).Justify(ui.SpaceBetween).DragWindow().Children(func() {
+				ui.Text(c, sectionTitle).FontSize(14).Bold().TextColor(p.fg)
+				if statusMsg != "" && !statusErr {
+					ui.Text(c, statusMsg).FontSize(10).TextColor(p.muted).Ellipsis("…").SingleLine()
+				}
+			})
+
+			ui.Column(c).FillWidth().Grow(1).Padding(0, 16, 8, 16).Gap(8).Children(func() {
+				switch tabIdx {
+				case 0:
+					s.renderAccountsTab(c, p, accountsCopy)
+				case 1:
+					s.renderProjectsTab(c, p, projectsCopy)
+				default:
+					s.renderSettingsTab(c, p)
+				}
+			})
+
+			// Footer
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(4, 16, 10, 16).Children(func() {
+				ui.Text(c, s.tr("footer.sharedCli")).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
+			})
 		})
 	})
 }
@@ -1164,14 +1218,246 @@ func (s *uiState) setThemeMode(mode string) {
 	s.mu.Unlock()
 
 	if win != nil {
-		if mode == "dark" {
+		switch mode {
+		case "dark":
 			mygo.Theme.SetSource(mygo.ThemeDark)
-		} else if mode == "light" {
+		case "light":
 			mygo.Theme.SetSource(mygo.ThemeLight)
+		default:
+			mygo.Theme.SetSource(mygo.ThemeSystem)
 		}
 		s.triggerUpdate(win)
 	}
 	go s.savePrefs()
+}
+
+func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
+	s.mu.Lock()
+	curTheme := s.theme
+	curLang := s.lang
+	scEnabled := s.shortcutEnabled
+	scAccel := s.shortcutAccel
+	scInput := s.shortcutInput
+	statusMsg := s.statusMsg
+	statusErr := s.statusErr
+	win := s.win
+	s.mu.Unlock()
+
+	if statusMsg != "" && statusErr {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(7, 10).Radius(9).Background(p.dangerSoft).Border(1, p.danger).Children(func() {
+			ui.Text(c, statusMsg).FontSize(10).TextColor(p.danger).Grow(1).Shrink(1)
+			if ui.ButtonBase(c).Padding(2).Radius(4).Cursor(ui.CursorPointer).Children(func() {
+				ui.Icon(c, closeSVG).Size(11, 11).TextColor(p.danger)
+			}).Clicked() {
+				s.mu.Lock()
+				s.statusMsg = ""
+				s.statusErr = false
+				s.mu.Unlock()
+			}
+		})
+	}
+
+	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
+		ui.Column(c).FillWidth().Gap(10).Children(func() {
+			// Appearance
+			ui.Column(c).FillWidth().Padding(12).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
+				ui.Text(c, s.tr("settings.appearance")).FontSize(11.5).Bold().TextColor(p.fg)
+				type themeOpt struct {
+					val   string
+					label string
+				}
+				opts := []themeOpt{
+					{"", s.tr("settings.theme.system")},
+					{"light", s.tr("settings.theme.light")},
+					{"dark", s.tr("settings.theme.dark")},
+				}
+				ui.Row(c).FillWidth().Padding(3).Gap(3).Radius(9).Background(p.soft).Children(func() {
+					for _, opt := range opts {
+						active := curTheme == opt.val
+						btn := ui.ButtonBase(c).Grow(1).Padding(6, 0).Radius(7).Center().Cursor(ui.CursorPointer)
+						if active {
+							btn = btn.Background(p.pillBg)
+						}
+						if btn.Children(func() {
+							col := p.muted
+							if active {
+								col = p.pillText
+							}
+							t := ui.Text(c, opt.label).FontSize(10.5).TextColor(col)
+							if active {
+								t.Bold()
+							}
+						}).Clicked() && !active {
+							s.setThemeMode(opt.val)
+						}
+					}
+				})
+			})
+
+			// Language
+			ui.Column(c).FillWidth().Padding(12).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
+				ui.Text(c, s.tr("settings.language")).FontSize(11.5).Bold().TextColor(p.fg)
+				type langOpt struct {
+					val   langCode
+					label string
+				}
+				opts := []langOpt{
+					{langZH, s.tr("settings.lang.zh")},
+					{langEN, s.tr("settings.lang.en")},
+				}
+				ui.Row(c).FillWidth().Padding(3).Gap(3).Radius(9).Background(p.soft).Children(func() {
+					for _, opt := range opts {
+						active := curLang == opt.val
+						btn := ui.ButtonBase(c).Grow(1).Padding(6, 0).Radius(7).Center().Cursor(ui.CursorPointer)
+						if active {
+							btn = btn.Background(p.pillBg)
+						}
+						if btn.Children(func() {
+							col := p.muted
+							if active {
+								col = p.pillText
+							}
+							t := ui.Text(c, opt.label).FontSize(10.5).TextColor(col)
+							if active {
+								t.Bold()
+							}
+						}).Clicked() && !active {
+							s.mu.Lock()
+							s.lang = opt.val
+							s.mu.Unlock()
+							go s.savePrefs()
+						}
+					}
+				})
+			})
+
+			// Global Shortcut
+			ui.Column(c).FillWidth().Padding(12).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+					ui.Text(c, s.tr("settings.shortcut")).FontSize(11.5).Bold().TextColor(p.fg)
+					enabled := scEnabled
+					ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+						ui.Text(c, s.tr("settings.shortcutEnable")).FontSize(10).TextColor(p.muted)
+						ui.Switch(c, &enabled)
+					})
+					if enabled != scEnabled {
+						s.mu.Lock()
+						s.shortcutEnabled = enabled
+						if !enabled {
+							s.statusMsg = s.tr("settings.shortcutOff")
+							s.statusErr = false
+						}
+						s.mu.Unlock()
+						s.applyShortcut(win)
+						go s.savePrefs()
+					}
+				})
+				ui.Text(c, s.tr("settings.shortcutDesc")).FontSize(10).TextColor(p.muted)
+
+				presets := []string{"CommandOrControl+Shift+A", "Alt+Shift+A", "CommandOrControl+Shift+M"}
+				ui.Row(c).FillWidth().Wrap().Gap(5).Children(func() {
+					for _, preset := range presets {
+						active := scEnabled && scAccel == preset
+						bg := p.soft
+						fg := p.muted
+						if active {
+							bg = p.accentSoft
+							fg = p.accent
+						}
+						if ui.ButtonBase(c).Padding(4, 8).Radius(999).Background(bg).Cursor(ui.CursorPointer).Children(func() {
+							txt := ui.Text(c, preset).FontSize(9.5).TextColor(fg)
+							if active {
+								txt.Bold()
+							}
+						}).Clicked() {
+							s.mu.Lock()
+							s.shortcutEnabled = true
+							s.shortcutAccel = preset
+							s.shortcutInput = preset
+							s.mu.Unlock()
+							s.applyShortcut(win)
+							go s.savePrefs()
+						}
+					}
+				})
+
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+					inp := ui.TextInput(c, &scInput).Placeholder(s.tr("settings.shortcutPlaceholder")).Grow(1).Shrink(1)
+					if scInput != s.shortcutInput {
+						s.mu.Lock()
+						s.shortcutInput = scInput
+						s.mu.Unlock()
+					}
+					trimmed := strings.TrimSpace(scInput)
+					applyBtn := ui.ButtonBase(c).Padding(5, 11).Radius(7).Background(p.accent).Cursor(ui.CursorPointer).Disabled(trimmed == "").Children(func() {
+						ui.Text(c, s.tr("settings.shortcutApply")).FontSize(10.5).Bold().TextColor(ui.RGB(255, 255, 255))
+					})
+					if (applyBtn.Clicked() || inp.Submitted()) && trimmed != "" {
+						s.mu.Lock()
+						s.shortcutEnabled = true
+						s.shortcutAccel = trimmed
+						s.shortcutInput = trimmed
+						s.mu.Unlock()
+						s.applyShortcut(win)
+						go s.savePrefs()
+					}
+				})
+			})
+		})
+	})
+}
+
+func (s *uiState) applyShortcut(win *mygo.Window) {
+	if win == nil {
+		return
+	}
+	s.mu.Lock()
+	prev := s.registeredAccel
+	enabled := s.shortcutEnabled
+	accel := strings.TrimSpace(s.shortcutAccel)
+	s.mu.Unlock()
+
+	if prev != "" {
+		mygo.GlobalShortcut.Unregister(prev)
+	}
+	if !enabled || accel == "" {
+		s.mu.Lock()
+		s.registeredAccel = ""
+		s.mu.Unlock()
+		return
+	}
+	err := mygo.GlobalShortcut.Register(accel, func() {
+		if win.IsVisible() && !win.IsMinimized() {
+			win.Minimize()
+			return
+		}
+		if win.IsMinimized() {
+			win.Restore()
+		}
+		win.Show()
+		win.Focus()
+	})
+	s.mu.Lock()
+	if err != nil {
+		s.registeredAccel = ""
+		s.statusMsg = err.Error()
+		s.statusErr = true
+	} else {
+		s.registeredAccel = accel
+		if prev != "" && prev != accel {
+			s.statusMsg = s.tr("settings.shortcutSaved", accel)
+			s.statusErr = false
+		}
+	}
+	s.mu.Unlock()
+	s.triggerUpdate(win)
+}
+
+func maxFloat(a, b float32) float32 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (s *uiState) loadPrefs() {
@@ -1184,8 +1470,10 @@ func (s *uiState) loadPrefs() {
 		return
 	}
 	var payload struct {
-		Theme string   `json:"theme,omitempty"`
-		Lang  langCode `json:"lang,omitempty"`
+		Theme           string   `json:"theme,omitempty"`
+		Lang            langCode `json:"lang,omitempty"`
+		ShortcutEnabled *bool    `json:"shortcutEnabled,omitempty"`
+		ShortcutAccel   string   `json:"shortcutAccel,omitempty"`
 	}
 	if json.Unmarshal(raw, &payload) != nil {
 		return
@@ -1194,6 +1482,13 @@ func (s *uiState) loadPrefs() {
 	s.theme = payload.Theme
 	if payload.Lang == langZH || payload.Lang == langEN {
 		s.lang = payload.Lang
+	}
+	if payload.ShortcutEnabled != nil {
+		s.shortcutEnabled = *payload.ShortcutEnabled
+	}
+	if strings.TrimSpace(payload.ShortcutAccel) != "" {
+		s.shortcutAccel = strings.TrimSpace(payload.ShortcutAccel)
+		s.shortcutInput = s.shortcutAccel
 	}
 	s.mu.Unlock()
 }
@@ -1204,12 +1499,17 @@ func (s *uiState) savePrefs() {
 		return
 	}
 	s.mu.Lock()
+	enabled := s.shortcutEnabled
 	payload := struct {
-		Theme string   `json:"theme,omitempty"`
-		Lang  langCode `json:"lang,omitempty"`
+		Theme           string   `json:"theme,omitempty"`
+		Lang            langCode `json:"lang,omitempty"`
+		ShortcutEnabled *bool    `json:"shortcutEnabled,omitempty"`
+		ShortcutAccel   string   `json:"shortcutAccel,omitempty"`
 	}{
-		Theme: s.theme,
-		Lang:  s.lang,
+		Theme:           s.theme,
+		Lang:            s.lang,
+		ShortcutEnabled: &enabled,
+		ShortcutAccel:   s.shortcutAccel,
 	}
 	s.mu.Unlock()
 	data, err := json.MarshalIndent(payload, "", "  ")

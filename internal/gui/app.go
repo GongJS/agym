@@ -90,6 +90,7 @@ func Run() error {
 	mygo.App.OnBeforeQuit(func(_ *mygo.QuitEvent) {
 		quitting = true
 		stopPolling()
+		mygo.GlobalShortcut.UnregisterAll()
 		svc.Shutdown()
 	})
 
@@ -106,11 +107,11 @@ func Run() error {
 
 		win = mygo.NewWindow(mygo.WindowOptions{
 			Title:             "Agy Manager",
-			Width:             420,
-			Height:            280,
-			MinWidth:          396,
-			MinHeight:         240,
-			MaxHeight:         760,
+			Width:             700,
+			Height:            520,
+			MinWidth:          600,
+			MinHeight:         440,
+			MaxHeight:         820,
 			Hidden:            false,
 			TitleBarStyle:     mygo.TitleBarHiddenInset,
 			DisableMaximize:   true,
@@ -119,6 +120,7 @@ func Run() error {
 		})
 		win.Center()
 		state.setWindow(win, startPolling, stopPolling)
+		state.applyShortcut(win)
 
 		showWindow := func() {
 			if win.IsMinimized() {
@@ -199,31 +201,7 @@ func (s *uiState) triggerUpdate(win *mygo.Window) {
 }
 
 func (s *uiState) syncWindowHeight(win *mygo.Window) {
-	if win == nil {
-		return
-	}
-	s.mu.Lock()
-	hasContent := len(s.accounts) > 0 || len(s.projects) > 0 || s.showAddAccount || (s.oauth.State != "" && s.oauth.State != "idle")
-	targetH := 280
-	if hasContent {
-		targetH = 540
-	}
-	prevH := s.lastWindowHeight
-	changed := prevH != targetH
-	if changed {
-		s.lastWindowHeight = targetH
-	}
-	s.mu.Unlock()
-	if changed {
-		w, _ := win.Size()
-		if w <= 0 {
-			w = 420
-		}
-		win.SetSize(w, targetH)
-		if prevH == 0 {
-			win.Center()
-		}
-	}
+	// Standard 2-column window preserves user-chosen size rather than auto-shrinking.
 }
 
 func (s *uiState) isProjectsTab() bool {
