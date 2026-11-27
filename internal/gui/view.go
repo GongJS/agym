@@ -100,8 +100,9 @@ func currentPalette(c *ui.Context) palette {
 var (
 	sunSVG          = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`))
 	moonSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`))
-	chevronRightSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))
-	chevronDownSVG  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`))
+	chevronRightSVG    = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))
+	chevronDownSVG     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`))
+	chevronsUpDownSVG  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>`))
 	refreshSVG      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`))
 	clockSVG        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`))
 	plusSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`))
@@ -138,8 +139,10 @@ type uiState struct {
 	projectsLoaded     bool
 	projectsLoading    bool
 	adding             bool
-	showAddAccount     bool
-	confirmRemoveEmail string
+	showAddAccount         bool
+	sidebarAccountMenuOpen bool
+	confirmRemoveEmail     string
+	confirmRemoveProject   string
 	addEmail           string
 	oauthCode         string
 	oauth             appservice.OAuthStatusView
@@ -198,6 +201,8 @@ func (s *uiState) view(c *ui.Context) {
 	activeModel := s.currentAgyModel
 	statusMsg := s.statusMsg
 	statusErr := s.statusErr
+	menuOpen := s.sidebarAccountMenuOpen
+	win := s.win
 	s.mu.Unlock()
 
 	if themeOverride == "dark" {
@@ -230,7 +235,7 @@ func (s *uiState) view(c *ui.Context) {
 
 	ui.Row(c).Fill().Children(func() {
 		// Left Sidebar
-		ui.Column(c).Width(188).FillHeight().Background(p.cardSub).Padding(sidebarTopPad, 10, 10, 10).Gap(10).Children(func() {
+		ui.Column(c).Width(164).FillHeight().Background(p.cardSub).Padding(sidebarTopPad, 10, 10, 10).Gap(10).Children(func() {
 			// Brand header (draggable)
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(7).Padding(2, 4).DragWindow().Children(func() {
 				ui.Box(c).Width(22).Height(22).Radius(6).Background(p.accent).Center().Children(func() {
@@ -278,37 +283,144 @@ func (s *uiState) view(c *ui.Context) {
 			ui.Box(c).Grow(1)
 
 			// Bottom-left active account card (2 rows: avatar+email, model)
-			if ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(10).Background(p.card).Border(1, p.line).Cursor(ui.CursorPointer).Children(func() {
-				initial := "?"
-				if activeEmail != "" {
-					initial = strings.ToUpper(activeEmail[:1])
-				}
-				emailLabel := activeEmail
-				if emailLabel == "" {
-					emailLabel = s.tr("sidebar.noAccount")
-				}
-				modelLabel := activeModel
-				if modelLabel == "" {
-					modelLabel = s.tr("sidebar.noModel")
-				}
-				dotCol := p.muted
-				if activeEmail != "" {
-					dotCol = p.ok
-				}
+			hasMultiple := len(accountsCopy) > 1
+			canJumpTab := tabIdx != 0 || len(accountsCopy) == 0
+			cardInteractive := hasMultiple || canJumpTab
+			cardCursor := ui.CursorDefault
+			if cardInteractive {
+				cardCursor = ui.CursorPointer
+			}
+			cardBorder := p.line
+			if menuOpen {
+				cardBorder = p.accent
+			}
+
+			initial := "?"
+			if runes := []rune(activeEmail); len(runes) > 0 {
+				initial = strings.ToUpper(string(runes[:1]))
+			}
+			emailLabel := activeEmail
+			if emailLabel == "" {
+				emailLabel = s.tr("sidebar.noAccount")
+			}
+			modelLabel := activeModel
+			if modelLabel == "" {
+				modelLabel = s.tr("sidebar.noModel")
+			}
+			dotCol := p.muted
+			if activeEmail != "" {
+				dotCol = p.ok
+			}
+
+			accountCard := ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(10).Background(p.card).Border(1, cardBorder).Cursor(cardCursor).Disabled(!cardInteractive).Children(func() {
 				ui.Column(c).FillWidth().Gap(5).Children(func() {
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 						ui.Box(c).Width(20).Height(20).Radius(10).Background(p.accentSoft).Center().Children(func() {
 							ui.Text(c, initial).FontSize(10).Bold().TextColor(p.accent)
 						})
-						ui.Text(c, emailLabel).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+						if hasMultiple {
+							ui.Icon(c, chevronsUpDownSVG).Size(12, 12).TextColor(p.muted)
+						} else if tabIdx != 0 {
+							ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
+						} else if len(accountsCopy) == 0 {
+							ui.Icon(c, plusSVG).Size(11, 11).TextColor(p.accent)
+						}
 					})
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(5).Padding(0, 2).Children(func() {
+					ui.Text(c, emailLabel).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
+					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(5).Children(func() {
 						ui.Box(c).Width(5).Height(5).Radius(3).Background(dotCol)
 						ui.Text(c, modelLabel).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 					})
 				})
-			}).Clicked() {
-				s.switchTab(0)
+			})
+			if accountCard.Clicked() {
+				if hasMultiple {
+					s.mu.Lock()
+					s.sidebarAccountMenuOpen = !menuOpen
+					s.mu.Unlock()
+					menuOpen = !menuOpen
+				} else if tabIdx != 0 {
+					s.switchTab(0)
+				} else if len(accountsCopy) == 0 {
+					s.mu.Lock()
+					s.showAddAccount = true
+					s.mu.Unlock()
+					s.syncWindowHeight(win)
+				}
+			}
+
+			if hasMultiple {
+				popOpen := menuOpen
+				ui.PopoverBase(c, accountCard, &popOpen, func(panel ui.Element) {
+					panel.Attach(ui.AnchorTopLeft, ui.AnchorBottomLeft).Width(212).Padding(6).Radius(10).Background(p.card).Border(1, p.line).Children(func() {
+						ui.Column(c).FillWidth().Gap(3).Children(func() {
+							for _, a := range accountsCopy {
+								canSwitch := !a.Current && a.HasSavedLogin
+								rowCursor := ui.CursorDefault
+								if canSwitch {
+									rowCursor = ui.CursorPointer
+								}
+								rowBg := ui.Color{}
+								if a.Current {
+									rowBg = p.accentSoft
+								}
+								itemBtn := ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(7).Background(rowBg).Cursor(rowCursor).Disabled(!canSwitch && !a.Current).Children(func() {
+									ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+										dot := p.muted
+										if a.Current {
+											dot = p.accent
+										} else if a.HasSavedLogin {
+											dot = p.ok
+										}
+										ui.Box(c).Width(6).Height(6).Radius(3).Background(dot)
+										nameColor := p.fg
+										if a.Current {
+											nameColor = p.accent
+										} else if !a.HasSavedLogin {
+											nameColor = p.muted
+										}
+										txt := ui.Text(c, a.Email).FontSize(10.5).TextColor(nameColor).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+										if a.Current {
+											txt.Bold()
+										}
+										if a.Current {
+											ui.Text(c, s.tr("account.current")).FontSize(9).Bold().TextColor(p.accent)
+										} else if !a.HasSavedLogin {
+											ui.Text(c, s.tr("account.needLogin")).FontSize(9).TextColor(p.warnText)
+										}
+									})
+								})
+								if itemBtn.Clicked() && canSwitch {
+									popOpen = false
+									s.mu.Lock()
+									s.sidebarAccountMenuOpen = false
+									s.mu.Unlock()
+									s.switchAccountAsync(win, a.Email)
+								}
+							}
+							if tabIdx != 0 {
+								ui.Divider(c)
+								if ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(7).Cursor(ui.CursorPointer).Children(func() {
+									ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+										ui.Text(c, s.tr("sidebar.manageAccounts")).FontSize(10.5).TextColor(p.muted)
+										ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
+									})
+								}).Clicked() {
+									popOpen = false
+									s.mu.Lock()
+									s.sidebarAccountMenuOpen = false
+									s.mu.Unlock()
+									s.switchTab(0)
+								}
+							}
+						})
+					})
+				})
+				if popOpen != menuOpen {
+					s.mu.Lock()
+					s.sidebarAccountMenuOpen = popOpen
+					s.mu.Unlock()
+				}
 			}
 		})
 
@@ -357,6 +469,7 @@ func (s *uiState) view(c *ui.Context) {
 func (s *uiState) switchTab(next int) {
 	s.mu.Lock()
 	s.tabIndex = next
+	s.shortcutRecording = false
 	startPoll := s.startPoll
 	stopPoll := s.stopPoll
 	s.mu.Unlock()
@@ -375,7 +488,6 @@ func (s *uiState) switchTab(next int) {
 
 func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice.AccountView) {
 	s.mu.Lock()
-	activeModel := s.currentAgyModel
 	refreshing := s.refreshing
 	showAdd := s.showAddAccount
 	oauthState := s.oauth.State
@@ -384,23 +496,40 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 	win := s.win
 	s.mu.Unlock()
 
-	summary := s.tr("summary.none")
+	rotationCount := 0
 	for _, a := range items {
-		if a.Current {
-			summary = s.tr("summary.current", a.Email)
-			break
+		if a.Rotation {
+			rotationCount++
 		}
 	}
-	if len(items) == 0 && refreshing {
+	summary := s.tr("summary.none")
+	if len(items) > 0 {
+		summary = s.tr("summary.stats", len(items), rotationCount)
+	} else if refreshing {
 		summary = s.tr("summary.refreshing")
 	}
-	ui.Column(c).FillWidth().Gap(3).Children(func() {
-		ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine()
-		if activeModel != "" && len(items) > 0 {
-			ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
-				ui.Box(c).Width(6).Height(6).Radius(3).Background(p.accent)
-				ui.Text(c, s.tr("summary.model", activeModel)).FontSize(10).TextColor(p.muted).Ellipsis("…").SingleLine()
+
+	rightPad := float32(0)
+	if len(items) > 0 {
+		rightPad = 16
+	}
+
+	ui.Row(c).FillWidth().Padding(0, rightPad, 0, 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
+		ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+		if len(items) > 0 {
+			allBtn := ui.ButtonBase(c).Padding(4, 9).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing).Children(func() {
+				ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+					ui.Icon(c, refreshSVG).Size(10.5, 10.5).TextColor(p.fg)
+					label := s.tr("summary.refreshAll")
+					if refreshing {
+						label = "…"
+					}
+					ui.Text(c, label).FontSize(9.8).Bold().TextColor(p.fg)
+				})
 			})
+			if allBtn.Clicked() {
+				s.refreshQuotasAsync(win)
+			}
 		}
 	})
 
@@ -428,22 +557,24 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 		})
 	}
 
-	oauthActive := oauthState != "" && oauthState != "idle"
-	if len(items) == 0 || showAdd || oauthActive {
-		s.renderOnboardingCard(c, p, len(items) > 0)
-	} else {
-		if ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(10).Background(p.card).Border(1, p.line).Center().Cursor(ui.CursorPointer).Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Icon(c, plusSVG).Size(12, 12).TextColor(p.accent)
-				ui.Text(c, s.tr("account.addToggle")).FontSize(10.5).Bold().TextColor(p.fg)
-			})
-		}).Clicked() {
-			s.mu.Lock()
-			s.showAddAccount = true
-			s.mu.Unlock()
-			s.syncWindowHeight(win)
+	ui.Box(c).FillWidth().Padding(0, rightPad, 0, 0).Children(func() {
+		oauthActive := oauthState != "" && oauthState != "idle"
+		if len(items) == 0 || showAdd || oauthActive {
+			s.renderOnboardingCard(c, p, len(items) > 0)
+		} else {
+			if ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(10).Background(p.card).Border(1, p.line).Center().Cursor(ui.CursorPointer).Children(func() {
+				ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+					ui.Icon(c, plusSVG).Size(12, 12).TextColor(p.accent)
+					ui.Text(c, s.tr("account.addToggle")).FontSize(10.5).Bold().TextColor(p.fg)
+				})
+			}).Clicked() {
+				s.mu.Lock()
+				s.showAddAccount = true
+				s.mu.Unlock()
+				s.syncWindowHeight(win)
+			}
 		}
-	}
+	})
 }
 
 func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.AccountView) {
@@ -505,17 +636,6 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 				if titleRow.Clicked() {
 					toggleClicked = true
 				}
-
-				cardRefreshBtn := ui.ButtonBase(c).Width(22).Height(22).Radius(6).Background(p.soft).Center().Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
-					if cardRefreshing {
-						ui.Text(c, "…").FontSize(10.5).Bold().TextColor(p.muted)
-					} else {
-						ui.Icon(c, refreshSVG).Size(11.5, 11.5).TextColor(p.muted)
-					}
-				})
-				if cardRefreshBtn.Clicked() {
-					s.refreshSingleAccountAsync(win, acc.Email)
-				}
 			} else {
 				titleCol := ui.Column(c).Grow(1).Shrink(1).Gap(4).Cursor(ui.CursorPointer).Children(func() {
 					ui.Text(c, acc.Email).FontSize(11.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
@@ -553,7 +673,8 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 		})
 
 		if expanded {
-			ui.Column(c).FillWidth().Gap(9).Padding(9, 10).Radius(9).Background(p.cardSub).Border(1, p.line).Children(func() {
+			ui.Divider(c)
+			ui.Column(c).FillWidth().Padding(2, 0, 0, 0).Gap(9).Children(func() {
 				if acc.Quota == nil || len(acc.Quota.Buckets) == 0 {
 					if acc.Quota != nil && acc.Quota.Status != "" && acc.Quota.Status != "ok" {
 						ui.Text(c, s.quotaFailureMessage(acc.Quota.Status, acc.Quota.Error)).FontSize(10).TextColor(p.warnText)
@@ -721,20 +842,103 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 	oauthBusy := oauth.State == accounts.OAuthStateStarting || oauth.State == accounts.OAuthStateWaiting || oauth.State == accounts.OAuthStateAuthorize
 
 	ui.Column(c).FillWidth().Padding(10, 11).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
-		if collapsible && !oauthBusy {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-				ui.Text(c, s.tr("account.addToggle")).FontSize(10.5).Bold().TextColor(p.fg)
-				if ui.ButtonBase(c).Padding(2, 6).Radius(5).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
-					ui.Text(c, s.tr("account.collapse")).FontSize(9.5).TextColor(p.muted)
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+			ui.Text(c, s.tr("account.addToggle")).FontSize(11).Bold().TextColor(p.fg)
+			if collapsible && !oauthBusy {
+				if ui.ButtonBase(c).Padding(4).Radius(5).Cursor(ui.CursorPointer).Children(func() {
+					ui.Icon(c, chevronDownSVG).Size(12, 12).TextColor(p.muted)
 				}).Clicked() {
 					s.mu.Lock()
 					s.showAddAccount = false
 					s.mu.Unlock()
 					s.syncWindowHeight(win)
 				}
-			})
+			}
+		})
+
+		oauthBg := p.accent
+		oauthFg := ui.RGB(255, 255, 255)
+		oauthLabel := s.tr("account.oauthStart")
+		if oauthBusy {
+			oauthBg = p.soft
+			oauthFg = p.muted
+			oauthLabel = s.tr("account.oauthBusy")
+		}
+		if ui.ButtonBase(c).FillWidth().Padding(7, 10).Radius(8).Background(oauthBg).Cursor(ui.CursorPointer).Disabled(oauthBusy).Center().Children(func() {
+			ui.Text(c, oauthLabel).FontSize(10.5).Bold().TextColor(oauthFg)
+		}).Clicked() {
+			s.startOAuthAsync(win)
 		}
 
+		if oauth.State != "" && oauth.State != "idle" {
+			msg := oauth.Message
+			if key := "oauth." + oauth.State; s.tr(key) != key {
+				msg = s.tr(key)
+			}
+			if oauth.State == "error" && oauth.Message != "" {
+				msg = oauth.Message
+			}
+			if oauth.State == "error" {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Padding(7, 9).Radius(8).Background(p.dangerSoft).Children(func() {
+					ui.Text(c, msg).FontSize(10).TextColor(p.danger).Grow(1).Shrink(1)
+					if ui.ButtonBase(c).Padding(2).Radius(4).Cursor(ui.CursorPointer).Children(func() {
+						ui.Icon(c, closeSVG).Size(10.5, 10.5).TextColor(p.danger)
+					}).Clicked() {
+						s.mu.Lock()
+						s.oauth = appservice.OAuthStatusView{State: "idle"}
+						s.mu.Unlock()
+						s.syncWindowHeight(win)
+					}
+				})
+			} else {
+				ui.Column(c).FillWidth().Gap(6).Padding(4, 0, 2, 0).Children(func() {
+					ui.Text(c, msg).FontSize(10).TextColor(p.fg)
+
+					if oauth.State == accounts.OAuthStateAuthorize && oauth.URL != "" {
+						if ui.ButtonBase(c).Padding(4, 8).Radius(6).Background(p.accentSoft).Cursor(ui.CursorPointer).Children(func() {
+							ui.Text(c, s.tr("oauth.openLink")).FontSize(10).Bold().TextColor(p.accent)
+						}).Clicked() {
+							go func(u string) { _ = mygo.Shell.OpenExternal(u) }(oauth.URL)
+						}
+
+						trimmedCode := strings.TrimSpace(code)
+						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+							codeInp := ui.TextInput(c, &code).Placeholder(s.tr("oauth.codePlaceholder")).Grow(1).Shrink(1)
+							if code != s.oauthCode {
+								s.mu.Lock()
+								s.oauthCode = code
+								s.mu.Unlock()
+							}
+							subBg, subFg := p.soft, p.muted
+							if trimmedCode != "" {
+								subBg, subFg = p.accent, ui.RGB(255, 255, 255)
+							}
+							subBtn := ui.ButtonBase(c).Padding(4, 9).Radius(6).Background(subBg).Cursor(ui.CursorPointer).Disabled(trimmedCode == "").Children(func() {
+								ui.Text(c, s.tr("oauth.submit")).FontSize(10).Bold().TextColor(subFg)
+							})
+							if (subBtn.Clicked() || codeInp.Submitted()) && trimmedCode != "" {
+								s.submitOAuthCodeAsync(win, oauth.AttemptID, trimmedCode)
+							}
+						})
+					}
+
+					if oauthBusy {
+						if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+							ui.Text(c, s.tr("oauth.cancel")).FontSize(9.5).Bold().TextColor(p.danger)
+						}).Clicked() {
+							s.cancelOAuthAsync(win, oauth.AttemptID)
+						}
+					}
+				})
+			}
+		}
+
+		ui.Divider(c)
+
+		ui.Text(c, s.tr("account.addHint")).FontSize(9.5).TextColor(p.muted)
+
+		trimmedEmail := strings.TrimSpace(email)
+		canImport := !adding && trimmedEmail != ""
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
 			inp := ui.TextInput(c, &email).Placeholder(s.tr("account.addPlaceholder")).Grow(1).Shrink(1)
 			if email != s.addEmail {
@@ -742,69 +946,25 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 				s.addEmail = email
 				s.mu.Unlock()
 			}
-			addBtn := ui.ButtonBase(c).Padding(5, 10).Radius(7).Background(p.accent).Cursor(ui.CursorPointer).Disabled(adding || email == "").Children(func() {
-				ui.Text(c, s.tr("account.add")).FontSize(10.5).Bold().TextColor(ui.RGB(255, 255, 255))
+			importBg, importFg := p.soft, p.muted
+			if canImport {
+				importBg, importFg = p.accentSoft, p.accent
+			}
+			addBtn := ui.ButtonBase(c).Padding(5, 10).Radius(7).Background(importBg).Cursor(ui.CursorPointer).Disabled(!canImport).Children(func() {
+				ui.Text(c, s.tr("account.add")).FontSize(10.5).Bold().TextColor(importFg)
 			})
-			if addBtn.Clicked() || inp.Submitted() {
-				s.addAccountAsync(win, email)
+			if (addBtn.Clicked() || inp.Submitted()) && canImport {
+				s.addAccountAsync(win, trimmedEmail)
 			}
 		})
-
-		if ui.ButtonBase(c).FillWidth().Padding(6, 10).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Disabled(oauthBusy).Center().Children(func() {
-			ui.Text(c, s.tr("account.oauthStart")).FontSize(10.5).Bold().TextColor(p.fg)
-		}).Clicked() {
-			s.startOAuthAsync(win)
-		}
-
-		if oauth.State != "" && oauth.State != "idle" {
-			ui.Column(c).FillWidth().Gap(6).Padding(8, 9).Radius(9).Background(p.cardSub).Border(1, p.line).Children(func() {
-				msg := oauth.Message
-				if key := "oauth." + oauth.State; s.tr(key) != key {
-					msg = s.tr(key)
-				}
-				if oauth.State == "error" && oauth.Message != "" {
-					msg = oauth.Message
-				}
-				ui.Text(c, msg).FontSize(10).TextColor(p.fg)
-
-				if oauth.State == accounts.OAuthStateAuthorize && oauth.URL != "" {
-					if ui.ButtonBase(c).Padding(4, 8).Radius(6).Background(p.accentSoft).Cursor(ui.CursorPointer).Children(func() {
-						ui.Text(c, s.tr("oauth.openLink")).FontSize(10).Bold().TextColor(p.accent)
-					}).Clicked() {
-						go func(u string) { _ = mygo.Shell.OpenExternal(u) }(oauth.URL)
-					}
-
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
-						codeInp := ui.TextInput(c, &code).Placeholder(s.tr("oauth.codePlaceholder")).Grow(1).Shrink(1)
-						if code != s.oauthCode {
-							s.mu.Lock()
-							s.oauthCode = code
-							s.mu.Unlock()
-						}
-						subBtn := ui.ButtonBase(c).Padding(4, 9).Radius(6).Background(p.accent).Cursor(ui.CursorPointer).Disabled(code == "").Children(func() {
-							ui.Text(c, s.tr("oauth.submit")).FontSize(10).Bold().TextColor(ui.RGB(255, 255, 255))
-						})
-						if subBtn.Clicked() || codeInp.Submitted() {
-							s.submitOAuthCodeAsync(win, oauth.AttemptID, code)
-						}
-					})
-				}
-
-				if oauthBusy {
-					if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
-						ui.Text(c, s.tr("oauth.cancel")).FontSize(9.5).Bold().TextColor(p.danger)
-					}).Clicked() {
-						s.cancelOAuthAsync(win, oauth.AttemptID)
-					}
-				}
-			})
-		}
 	})
 }
 
 func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.ProjectView) {
 	s.mu.Lock()
 	loading := s.projectsLoading && !s.projectsLoaded
+	refreshing := s.projectsLoading
+	win := s.win
 	s.mu.Unlock()
 
 	if loading {
@@ -813,6 +973,34 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 		})
 		return
 	}
+
+	runningCount := 0
+	for _, proj := range items {
+		if proj.Active {
+			runningCount++
+		}
+	}
+	rightPad := float32(0)
+	if len(items) > 0 {
+		rightPad = 16
+	}
+	summary := s.tr("projects.stats", len(items), runningCount)
+	ui.Row(c).FillWidth().Padding(0, rightPad, 0, 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
+		ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+		refBtn := ui.ButtonBase(c).Padding(4, 9).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+				ui.Icon(c, refreshSVG).Size(10.5, 10.5).TextColor(p.fg)
+				label := s.tr("projects.refresh")
+				if refreshing {
+					label = "…"
+				}
+				ui.Text(c, label).FontSize(9.8).Bold().TextColor(p.fg)
+			})
+		})
+		if refBtn.Clicked() {
+			s.loadProjectsAsync(win, true)
+		}
+	})
 
 	if len(items) == 0 {
 		ui.Column(c).FillWidth().Grow(1).Center().Children(func() {
@@ -836,6 +1024,7 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.ProjectView) {
 	s.mu.Lock()
 	expanded := s.expandedProjects[proj.Path]
+	confirmingRemove := s.confirmRemoveProject == proj.Path
 	win := s.win
 	s.mu.Unlock()
 
@@ -853,7 +1042,7 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 	fresh := max64(0, proj.LatestInput)
 	cacheRead := max64(0, proj.LatestCacheRead)
 	output := max64(0, proj.LatestOutput)
-	used := fresh + cacheRead
+	used := fresh + cacheRead + output
 	free := max64(0, limit-used)
 	pctVal := math.Min(100, (float64(used)/float64(limit))*100)
 	pctInt := int(math.Round(pctVal))
@@ -877,6 +1066,7 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 			}
 
 			toggleClicked := false
+			copyClicked := false
 			infoCol := ui.Column(c).Grow(1).Shrink(1).Gap(2).Cursor(ui.CursorPointer).Children(func() {
 				ui.Text(c, proj.Name).FontSize(12).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
 
@@ -886,6 +1076,7 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 						ui.Icon(c, copySVG).Size(10.5, 10.5).TextColor(p.muted)
 					})
 					if copyBtn.Clicked() {
+						copyClicked = true
 						go func(path, name string) {
 							mygo.Clipboard.WriteText(path)
 							s.mu.Lock()
@@ -919,11 +1110,13 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 					}
 				})
 			})
-			if infoCol.Clicked() {
+			if infoCol.Clicked() && !copyClicked {
 				toggleClicked = true
 			}
 
-			renderContextRing(c, p, pctInt)
+			if !expanded {
+				renderContextRing(c, p, pctInt)
+			}
 
 			chevIcon := chevronRightSVG
 			if expanded {
@@ -937,13 +1130,16 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 			if toggleClicked {
 				s.mu.Lock()
 				s.expandedProjects[proj.Path] = !expanded
+				if s.confirmRemoveProject == proj.Path {
+					s.confirmRemoveProject = ""
+				}
 				s.mu.Unlock()
 			}
 		})
 
 		if expanded {
-
-			ui.Column(c).FillWidth().Gap(8).Padding(9, 10).Radius(10).Background(p.cardSub).Border(1, p.line).Children(func() {
+			ui.Divider(c)
+			ui.Column(c).FillWidth().Padding(2, 0, 0, 0).Gap(8).Children(func() {
 				// Context Hero
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 					ui.Row(c).AlignItems(ui.Baseline).Gap(5).Children(func() {
@@ -997,21 +1193,36 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 
 				// Footer
 				totalTokens := proj.TotalInput + proj.TotalCacheRead + proj.TotalOutput
-				statusLabel := s.tr("projects.idle")
-				if proj.Active {
-					statusLabel = s.tr("projects.running")
-				}
 				ui.Divider(c)
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Padding(2, 0, 0, 0).Children(func() {
 					ui.Text(c, s.tr("projects.footer", proj.StepCount, formatTokens(totalTokens))).FontSize(9.5).TextColor(p.muted)
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						ui.Text(c, statusLabel).FontSize(9.5).TextColor(p.muted)
-						if ui.ButtonBase(c).Padding(2, 6).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
-							ui.Text(c, s.tr("projects.remove")).FontSize(9.5).Bold().TextColor(p.danger)
+					if confirmingRemove {
+						ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
+							if ui.ButtonBase(c).Padding(3, 7).Radius(5).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
+								ui.Text(c, s.tr("account.cancelRemove")).FontSize(9.5).TextColor(p.muted)
+							}).Clicked() {
+								s.mu.Lock()
+								s.confirmRemoveProject = ""
+								s.mu.Unlock()
+							}
+							if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.danger).Cursor(ui.CursorPointer).Children(func() {
+								ui.Text(c, s.tr("account.confirmRemove")).FontSize(9.5).Bold().TextColor(ui.RGB(255, 255, 255))
+							}).Clicked() {
+								s.mu.Lock()
+								s.confirmRemoveProject = ""
+								s.mu.Unlock()
+								s.removeProjectAsync(win, proj.Path)
+							}
+						})
+					} else {
+						if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+							ui.Text(c, s.tr("account.remove")).FontSize(9.5).Bold().TextColor(p.danger)
 						}).Clicked() {
-							s.removeProjectAsync(win, proj.Path)
+							s.mu.Lock()
+							s.confirmRemoveProject = proj.Path
+							s.mu.Unlock()
 						}
-					})
+					}
 				})
 			})
 		}
@@ -1449,7 +1660,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 			}
 
 			ui.Row(c).FillWidth().Padding(10, 12).Radius(12).Background(p.card).Border(1, p.line).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-				ui.Text(c, s.tr("settings.shortcut")).FontSize(11.5).TextColor(p.fg)
+				ui.Text(c, s.tr("settings.shortcut")).FontSize(11.5).Bold().TextColor(p.fg)
 
 				ui.Row(c).AlignItems(ui.Center).Gap(7).Children(func() {
 					pillBg := p.soft
@@ -1513,6 +1724,9 @@ func (s *uiState) applyShortcut(win *mygo.Window) {
 	accel := strings.TrimSpace(s.shortcutAccel)
 	s.mu.Unlock()
 
+	if enabled && accel != "" && prev == accel {
+		return
+	}
 	if prev != "" {
 		mygo.GlobalShortcut.Unregister(prev)
 	}
@@ -1522,14 +1736,29 @@ func (s *uiState) applyShortcut(win *mygo.Window) {
 		s.mu.Unlock()
 		return
 	}
-	err := mygo.GlobalShortcut.Register(accel, func() {
+	toggleHandler := func() {
 		if win.IsVisible() {
 			win.Hide()
 			return
 		}
 		win.Show()
 		win.Focus()
-	})
+	}
+	err := mygo.GlobalShortcut.Register(accel, toggleHandler)
+	if err != nil && prev != "" {
+		if rollbackErr := mygo.GlobalShortcut.Register(prev, toggleHandler); rollbackErr == nil {
+			s.mu.Lock()
+			s.registeredAccel = prev
+			s.shortcutAccel = prev
+			s.shortcutInput = prev
+			s.shortcutEnabled = true
+			s.statusMsg = err.Error()
+			s.statusErr = true
+			s.mu.Unlock()
+			s.triggerUpdate(win)
+			return
+		}
+	}
 	s.mu.Lock()
 	if err != nil {
 		s.registeredAccel = ""
@@ -1538,7 +1767,7 @@ func (s *uiState) applyShortcut(win *mygo.Window) {
 	} else {
 		s.registeredAccel = accel
 		if prev != "" && prev != accel {
-			s.statusMsg = s.tr("settings.shortcutSaved", accel)
+			s.statusMsg = s.tr("settings.shortcutSaved", formatShortcutSymbols(accel))
 			s.statusErr = false
 		}
 	}
