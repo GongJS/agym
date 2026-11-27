@@ -31,6 +31,12 @@ func Run() error {
 
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
+	switch state.themeMode() {
+	case "light":
+		mygo.Theme.SetSource(mygo.ThemeLight)
+	case "dark":
+		mygo.Theme.SetSource(mygo.ThemeDark)
+	}
 
 	var win *mygo.Window
 	var quitting bool
@@ -94,25 +100,61 @@ func Run() error {
 		}
 
 		win = mygo.NewFlyout(mygo.FlyoutOptions{
-			Tray:       tray,
-			Width:      396,
-			Height:     280,
-			MinWidth:   396,
-			MaxWidth:   396,
-			MinHeight:  240,
-			MaxHeight:  680,
-			FitContent: false,
-			Focusable:  true,
-			Hidden:     true,
-			Popover:    true,
-			Content:    ui.View(state.view),
+			Tray:         tray,
+			Gap:          6,
+			Width:        396,
+			Height:       280,
+			MinWidth:     396,
+			MaxWidth:     396,
+			MinHeight:    240,
+			MaxHeight:    680,
+			FitContent:   false,
+			Focusable:    true,
+			Hidden:       true,
+			Shadow:       true,
+			CornerRadius: 14,
+			Popover:      false,
+			Content:      ui.View(state.view),
 		})
 		state.setWindow(win, startPolling, stopPolling)
+
+		positionFlyout := func() {
+			tb := tray.Bounds()
+			if tb.Width <= 0 && tb.Height <= 0 {
+				return
+			}
+			w, h := win.Size()
+			if w <= 0 {
+				w = 396
+			}
+			if h <= 0 {
+				h = 280
+			}
+			x := tb.X + (tb.Width-w)/2
+			y := tb.Y + tb.Height + 6
+			wa := mygo.Screen.DisplayNearestPoint(mygo.Point{X: tb.X, Y: tb.Y}).WorkArea
+			if wa.Width > 0 {
+				if x+w > wa.X+wa.Width-8 {
+					x = wa.X + wa.Width - w - 8
+				}
+				if x < wa.X+8 {
+					x = wa.X + 8
+				}
+				if y+h > wa.Y+wa.Height-8 {
+					y = tb.Y - h - 6
+				}
+				if y < wa.Y+4 {
+					y = wa.Y + 4
+				}
+			}
+			win.SetPosition(x, y)
+		}
 
 		menu := mygo.NewMenu([]*mygo.MenuItem{
 			{
 				Label: "Open Agy Manager",
 				Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
+					positionFlyout()
 					win.Show()
 				},
 			},
@@ -128,6 +170,7 @@ func Run() error {
 			if win.IsVisible() {
 				win.Hide()
 			} else {
+				positionFlyout()
 				win.Show()
 			}
 		})

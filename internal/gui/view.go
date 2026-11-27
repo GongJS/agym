@@ -93,6 +93,11 @@ func currentPalette(c *ui.Context) palette {
 	}
 }
 
+var (
+	sunSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`))
+	moonSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`))
+)
+
 type uiState struct {
 	mu                sync.Mutex
 	svc               *appservice.Accounts
@@ -100,6 +105,7 @@ type uiState struct {
 	startPoll         func()
 	stopPoll          func()
 	lang              langCode
+	theme             string
 	tabIndex          int
 	accounts          []appservice.AccountView
 	projects          []projects.ProjectView
@@ -139,9 +145,8 @@ func newUIState(svc *appservice.Accounts) *uiState {
 }
 
 func (s *uiState) view(c *ui.Context) {
-	p := currentPalette(c)
-
 	s.mu.Lock()
+	themeOverride := s.theme
 	tabIdx := s.tabIndex
 	accountsCopy := append([]appservice.AccountView(nil), s.accounts...)
 	projectsCopy := append([]projects.ProjectView(nil), s.projects...)
@@ -149,13 +154,53 @@ func (s *uiState) view(c *ui.Context) {
 	statusErr := s.statusErr
 	s.mu.Unlock()
 
-	ui.Column(c).Fill().Padding(12).Gap(10).Background(p.bg).Children(func() {
+	if themeOverride == "dark" {
+		c.SetTheme(ui.DarkTheme())
+	} else if themeOverride == "light" {
+		c.SetTheme(ui.LightTheme())
+	}
+	p := currentPalette(c)
+	isDark := c.Theme().Background.R < 128
+
+	root := ui.Column(c).Fill().Padding(12).Gap(10)
+	if !c.Vibrancy() {
+		root = root.Background(p.bg)
+	}
+	root.Children(func() {
 		// Header
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
 			ui.Box(c).Width(24).Height(24).Radius(7).Background(p.accent).Center().Children(func() {
 				ui.Text(c, "A").FontSize(12).Bold().TextColor(ui.RGB(255, 255, 255))
 			})
 			ui.Text(c, s.tr("app.title")).FontSize(13.5).Bold().TextColor(p.fg).Grow(1)
+
+			// Sun / Moon theme toggle pill
+			ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(2).Radius(999).Background(p.soft).Children(func() {
+				sunBtn := ui.ButtonBase(c).Width(24).Height(24).Radius(12).Center().Cursor(ui.CursorPointer)
+				sunCol := p.muted
+				if !isDark {
+					sunBtn = sunBtn.Background(p.pillBg)
+					sunCol = p.fg
+				}
+				if sunBtn.Children(func() {
+					ui.Icon(c, sunSVG).Size(13, 13).TextColor(sunCol)
+				}).Clicked() {
+					s.setThemeMode("light")
+				}
+
+				moonBtn := ui.ButtonBase(c).Width(24).Height(24).Radius(12).Center().Cursor(ui.CursorPointer)
+				moonCol := p.muted
+				if isDark {
+					moonBtn = moonBtn.Background(p.pillBg)
+					moonCol = p.fg
+				}
+				if moonBtn.Children(func() {
+					ui.Icon(c, moonSVG).Size(12, 12).TextColor(moonCol)
+				}).Clicked() {
+					s.setThemeMode("dark")
+				}
+			})
+
 			if ui.ButtonBase(c).Padding(4, 8).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
 				ui.Text(c, s.tr("lang.toggle")).FontSize(10.5).Bold().TextColor(p.fg)
 			}).Clicked() {
@@ -1112,6 +1157,29 @@ func uiPrefsPath() string {
 	return filepath.Join(home, ".cache", "agy-tools", "ui_prefs.json")
 }
 
+func (s *uiState) themeMode() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.theme
+}
+
+func (s *uiState) setThemeMode(mode string) {
+	s.mu.Lock()
+	s.theme = mode
+	win := s.win
+	s.mu.Unlock()
+
+	if win != nil {
+		if mode == "dark" {
+			mygo.Theme.SetSource(mygo.ThemeDark)
+		} else if mode == "light" {
+			mygo.Theme.SetSource(mygo.ThemeLight)
+		}
+		s.triggerUpdate(win)
+	}
+	go s.savePrefs()
+}
+
 func (s *uiState) loadPrefs() {
 	path := uiPrefsPath()
 	if path == "" {
@@ -1122,6 +1190,7 @@ func (s *uiState) loadPrefs() {
 		return
 	}
 	var payload struct {
+		Theme    string            `json:"theme,omitempty"`
 		Models   map[string]string `json:"models"`
 		Thinking map[string]string `json:"thinking"`
 	}
@@ -1129,6 +1198,7 @@ func (s *uiState) loadPrefs() {
 		return
 	}
 	s.mu.Lock()
+	s.theme = payload.Theme
 	for k, v := range payload.Models {
 		s.modelPrefs[k] = v
 	}
@@ -1145,9 +1215,11 @@ func (s *uiState) savePrefs() {
 	}
 	s.mu.Lock()
 	payload := struct {
+		Theme    string            `json:"theme,omitempty"`
 		Models   map[string]string `json:"models"`
 		Thinking map[string]string `json:"thinking"`
 	}{
+		Theme:    s.theme,
 		Models:   make(map[string]string, len(s.modelPrefs)),
 		Thinking: make(map[string]string, len(s.thinkingPrefs)),
 	}
