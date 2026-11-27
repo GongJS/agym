@@ -2,6 +2,7 @@ package gui
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 )
 
 type palette struct {
+	dark        bool
 	bg          ui.Color
 	card        ui.Color
 	cardSub     ui.Color
@@ -46,6 +48,7 @@ func currentPalette(c *ui.Context) palette {
 	dark := c.Theme().Background.R < 128
 	if dark {
 		return palette{
+			dark:       true,
 			bg:         ui.RGB(24, 26, 32),
 			card:       ui.RGBA(40, 44, 54, 0.92),
 			cardSub:    ui.RGBA(28, 31, 38, 0.90),
@@ -100,7 +103,9 @@ var (
 	chevronRightSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))
 	chevronDownSVG  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`))
 	refreshSVG      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`))
+	clockSVG        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`))
 	plusSVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`))
+	copySVG         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`))
 	closeSVG        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`))
 	accountsSVG     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`))
 	projectsSVG     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>`))
@@ -414,7 +419,7 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 
 	if len(items) > 0 {
 		ui.Scroll(c).FillWidth().Grow(1).Children(func() {
-			ui.Column(c).FillWidth().Gap(8).Children(func() {
+			ui.Column(c).FillWidth().Padding(0, 16, 0, 0).Gap(8).Children(func() {
 				for _, acc := range items {
 					s.renderAccountCard(c, p, acc)
 				}
@@ -459,29 +464,12 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 	ui.Column(c).Key(acc.Email).FillWidth().Padding(10, 11).Gap(8).Radius(12).Background(p.card).Border(borderW, borderCol).Children(func() {
 		// Card Header
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(7).Children(func() {
-			// Radio indicator
-			canSwitch := acc.Current || acc.HasSavedLogin
-			radioCol := p.line
-			radioCursor := ui.CursorPointer
-			if acc.Current {
-				radioCol = p.accent
-			} else if !canSwitch {
-				radioCol = p.track
-				radioCursor = ui.CursorDefault
-			}
-			radioBtn := ui.ButtonBase(c).Width(16).Height(16).Radius(8).Border(1.5, radioCol).Center().Cursor(radioCursor).Disabled(!canSwitch).Children(func() {
-				if acc.Current {
-					ui.Box(c).Width(8).Height(8).Radius(4).Background(p.accent)
-				}
-			})
-			if radioBtn.Clicked() && !acc.Current && acc.HasSavedLogin {
-				s.switchAccountAsync(win, acc.Email)
-			}
-
 			toggleClicked := false
-			titleRow := ui.Row(c).Grow(1).Shrink(1).AlignItems(ui.Center).Gap(5).Cursor(ui.CursorPointer).Children(func() {
-				ui.Text(c, acc.Email).FontSize(11.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
-
+			tierLabel := ""
+			if acc.Quota != nil {
+				tierLabel = formatTierLabel(acc.Quota.TierID, acc.Quota.TierName)
+			}
+			renderBadges := func() {
 				if acc.Current {
 					ui.Box(c).Padding(2, 6).Radius(999).Background(p.accentSoft).Children(func() {
 						ui.Text(c, s.tr("account.current")).FontSize(9.5).Bold().TextColor(p.accent)
@@ -496,29 +484,52 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 						ui.Text(c, s.tr("account.staleBadge")).FontSize(9.5).Bold().TextColor(p.warnText)
 					})
 				}
-				tierLabel := ""
-				if acc.Quota != nil {
-					tierLabel = formatTierLabel(acc.Quota.TierID, acc.Quota.TierName)
-				}
 				if tierLabel != "" {
 					ui.Box(c).Padding(2, 6).Radius(999).Background(p.soft).Children(func() {
 						ui.Text(c, tierLabel).FontSize(9.5).TextColor(p.muted)
 					})
 				}
-			})
-			if titleRow.Clicked() {
-				toggleClicked = true
+				if !expanded && acc.Rotation {
+					ui.Box(c).Padding(2, 6).Radius(999).Background(p.soft).Children(func() {
+						ui.Text(c, s.tr("account.inPool")).FontSize(9.5).TextColor(p.muted)
+					})
+				}
 			}
 
-			cardRefreshBtn := ui.ButtonBase(c).Width(22).Height(22).Radius(6).Background(p.soft).Center().Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
-				if cardRefreshing {
-					ui.Text(c, "…").FontSize(10.5).Bold().TextColor(p.muted)
-				} else {
-					ui.Icon(c, refreshSVG).Size(11.5, 11.5).TextColor(p.muted)
+			if expanded {
+				titleRow := ui.Row(c).Grow(1).Shrink(1).AlignItems(ui.Center).Gap(5).Cursor(ui.CursorPointer).Children(func() {
+					ui.Text(c, acc.Email).FontSize(11.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+					renderBadges()
+				})
+				if titleRow.Clicked() {
+					toggleClicked = true
 				}
-			})
-			if cardRefreshBtn.Clicked() {
-				s.refreshSingleAccountAsync(win, acc.Email)
+
+				cardRefreshBtn := ui.ButtonBase(c).Width(22).Height(22).Radius(6).Background(p.soft).Center().Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
+					if cardRefreshing {
+						ui.Text(c, "…").FontSize(10.5).Bold().TextColor(p.muted)
+					} else {
+						ui.Icon(c, refreshSVG).Size(11.5, 11.5).TextColor(p.muted)
+					}
+				})
+				if cardRefreshBtn.Clicked() {
+					s.refreshSingleAccountAsync(win, acc.Email)
+				}
+			} else {
+				titleCol := ui.Column(c).Grow(1).Shrink(1).Gap(4).Cursor(ui.CursorPointer).Children(func() {
+					ui.Text(c, acc.Email).FontSize(11.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
+					ui.Row(c).Wrap().AlignItems(ui.Center).Gap(4).Children(renderBadges)
+				})
+				if titleCol.Clicked() {
+					toggleClicked = true
+				}
+
+				if acc.Quota != nil && len(acc.Quota.Buckets) > 0 {
+					ui.Column(c).Gap(3).Children(func() {
+						renderMiniQuotaRow(c, p, "G", acc.Quota.Buckets, "g5", "gw")
+						renderMiniQuotaRow(c, p, "C", acc.Quota.Buckets, "c5", "cw")
+					})
+				}
 			}
 
 			chevIcon := chevronRightSVG
@@ -614,10 +625,39 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 					}
 				}
 
-				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Padding(4, 0, 0, 0).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Padding(4, 0, 2, 0).Children(func() {
+					ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
+						ui.Icon(c, clockSVG).Size(11, 11).TextColor(p.muted)
+						checkedText := s.tr("account.notChecked")
+						if acc.Quota != nil && acc.Quota.CheckedAt > 0 {
+							clockStr := time.Unix(acc.Quota.CheckedAt, 0).Local().Format("15:04")
+							if age := s.formatRelativeAge(acc.Quota.CheckedAt); age != "" {
+								checkedText = s.tr("account.checkedAt", clockStr, age)
+							}
+						}
+						ui.Text(c, checkedText).FontSize(9.5).TextColor(p.muted)
+					})
+					footerRefreshBtn := ui.ButtonBase(c).Padding(3, 8).Radius(6).Background(p.soft).Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
+						ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+							ui.Icon(c, refreshSVG).Size(10.5, 10.5).TextColor(p.fg)
+							label := s.tr("account.refresh")
+							if cardRefreshing {
+								label = "…"
+							}
+							ui.Text(c, label).FontSize(9.5).Bold().TextColor(p.fg)
+						})
+					})
+					if footerRefreshBtn.Clicked() {
+						s.refreshSingleAccountAsync(win, acc.Email)
+					}
+				})
+
+				ui.Divider(c)
+
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Padding(2, 0, 0, 0).Children(func() {
 					rot := acc.Rotation
-					ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-						ui.Switch(c, &rot)
+					ui.Row(c).AlignItems(ui.Center).Gap(6).Cursor(ui.CursorPointer).Children(func() {
+						ui.Switch(c, &rot).Cursor(ui.CursorPointer)
 						ui.Text(c, s.tr("account.rotation")).FontSize(10).TextColor(p.muted)
 					})
 					if rot != acc.Rotation {
@@ -644,13 +684,22 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 								}
 							})
 						} else {
-							if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
-								ui.Text(c, s.tr("account.remove")).FontSize(9.5).Bold().TextColor(p.danger)
-							}).Clicked() {
-								s.mu.Lock()
-								s.confirmRemoveEmail = acc.Email
-								s.mu.Unlock()
-							}
+							ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+								if acc.HasSavedLogin {
+									if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.accentSoft).Cursor(ui.CursorPointer).Children(func() {
+										ui.Text(c, s.tr("account.switch")).FontSize(9.5).Bold().TextColor(p.accent)
+									}).Clicked() {
+										s.switchAccountAsync(win, acc.Email)
+									}
+								}
+								if ui.ButtonBase(c).Padding(3, 8).Radius(5).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+									ui.Text(c, s.tr("account.remove")).FontSize(9.5).Bold().TextColor(p.danger)
+								}).Clicked() {
+									s.mu.Lock()
+									s.confirmRemoveEmail = acc.Email
+									s.mu.Unlock()
+								}
+							})
 						}
 					}
 				})
@@ -775,7 +824,7 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 	}
 
 	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
-		ui.Column(c).FillWidth().Gap(8).Children(func() {
+		ui.Column(c).FillWidth().Padding(0, 16, 0, 0).Gap(8).Children(func() {
 			for _, proj := range items {
 				s.renderProjectCard(c, p, proj)
 			}
@@ -796,64 +845,102 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 		borderW = 1.5
 	}
 
-	ui.Column(c).Key(proj.Path).FillWidth().Padding(10, 11).Gap(6).Radius(12).Background(p.card).Border(borderW, borderCol).Children(func() {
-		header := ui.Column(c).FillWidth().Gap(3).Cursor(ui.CursorPointer).Children(func() {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(7).Children(func() {
-				dotCol := p.muted
-				if proj.Active {
-					dotCol = p.ok
-				}
-				ui.Box(c).Width(7).Height(7).Radius(4).Background(dotCol)
-				ui.Text(c, proj.Name).FontSize(12).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
-				modelText := proj.Model
-				if modelText == "" {
-					if proj.Active {
-						modelText = s.tr("projects.running")
-					} else {
-						modelText = s.tr("projects.idle")
-					}
-				}
-				ui.Box(c).Padding(2, 6).Radius(999).Background(p.soft).Border(1, p.line).Children(func() {
-					ui.Text(c, modelText).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
-				})
-				chevIcon := chevronRightSVG
-				if expanded {
-					chevIcon = chevronDownSVG
-				}
-				ui.Icon(c, chevIcon).Size(12, 12).TextColor(p.muted)
-			})
+	limit := proj.ContextLimit
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	fresh := max64(0, proj.LatestInput)
+	cacheRead := max64(0, proj.LatestCacheRead)
+	output := max64(0, proj.LatestOutput)
+	used := fresh + cacheRead
+	free := max64(0, limit-used)
+	pctVal := math.Min(100, (float64(used)/float64(limit))*100)
+	pctInt := int(math.Round(pctVal))
+	if pctInt < 0 {
+		pctInt = 0
+	}
+	if pctInt > 100 {
+		pctInt = 100
+	}
 
-			pathBtn := ui.ButtonBase(c).FillWidth().Justify(ui.Start).Cursor(ui.CursorPointer).Children(func() {
-				ui.Text(c, proj.Path).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
+	ui.Column(c).Key(proj.Path).FillWidth().Padding(10, 11).Gap(8).Radius(12).Background(p.card).Border(borderW, borderCol).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(9).Children(func() {
+			if proj.Active {
+				ui.Box(c).Width(14).Height(14).Radius(7).Background(ui.RGBA(16, 185, 129, 0.20)).Center().Children(func() {
+					ui.Box(c).Width(6).Height(6).Radius(3).Background(p.ok)
+				})
+			} else {
+				ui.Box(c).Width(14).Height(14).Center().Children(func() {
+					ui.Box(c).Width(6).Height(6).Radius(3).Background(p.muted)
+				})
+			}
+
+			toggleClicked := false
+			infoCol := ui.Column(c).Grow(1).Shrink(1).Gap(2).Cursor(ui.CursorPointer).Children(func() {
+				ui.Text(c, proj.Name).FontSize(12).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
+
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
+					ui.Text(c, shortenHomePath(proj.Path)).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Shrink(1)
+					copyBtn := ui.ButtonBase(c).Padding(2).Radius(4).Cursor(ui.CursorPointer).Children(func() {
+						ui.Icon(c, copySVG).Size(10.5, 10.5).TextColor(p.muted)
+					})
+					if copyBtn.Clicked() {
+						go func(path, name string) {
+							mygo.Clipboard.WriteText(path)
+							s.mu.Lock()
+							s.statusMsg = s.tr("projects.copied", name)
+							s.statusErr = false
+							s.mu.Unlock()
+							s.triggerUpdate(win)
+						}(proj.Path, proj.Name)
+					}
+				})
+
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
+					if proj.Model != "" {
+						ui.Text(c, proj.Model).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Shrink(1)
+						ui.Text(c, "·").FontSize(9.5).TextColor(p.muted)
+					}
+					if proj.Active {
+						ui.Text(c, s.tr("projects.running")).FontSize(9.5).TextColor(p.ok)
+					} else {
+						idleText := s.tr("projects.idle")
+						if proj.LastActiveAt > 0 {
+							sec := proj.LastActiveAt
+							if sec > 1_000_000_000_000 {
+								sec /= 1000
+							}
+							if age := s.formatRelativeAge(sec); age != "" {
+								idleText = idleText + " · " + age
+							}
+						}
+						ui.Text(c, idleText).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine()
+					}
+				})
 			})
-			if pathBtn.Clicked() {
-				go func(path, name string) {
-					mygo.Clipboard.WriteText(path)
-					s.mu.Lock()
-					s.statusMsg = s.tr("projects.copied", name)
-					s.statusErr = false
-					s.mu.Unlock()
-					s.triggerUpdate(win)
-				}(proj.Path, proj.Name)
+			if infoCol.Clicked() {
+				toggleClicked = true
+			}
+
+			renderContextRing(c, p, pctInt)
+
+			chevIcon := chevronRightSVG
+			if expanded {
+				chevIcon = chevronDownSVG
+			}
+			if ui.ButtonBase(c).Padding(4).Radius(5).Cursor(ui.CursorPointer).Children(func() {
+				ui.Icon(c, chevIcon).Size(12, 12).TextColor(p.muted)
+			}).Clicked() {
+				toggleClicked = true
+			}
+			if toggleClicked {
+				s.mu.Lock()
+				s.expandedProjects[proj.Path] = !expanded
+				s.mu.Unlock()
 			}
 		})
-		if header.Clicked() {
-			s.mu.Lock()
-			s.expandedProjects[proj.Path] = !expanded
-			s.mu.Unlock()
-		}
 
 		if expanded {
-			limit := proj.ContextLimit
-			if limit <= 0 {
-				limit = 1_000_000
-			}
-			fresh := max64(0, proj.LatestInput)
-			cacheRead := max64(0, proj.LatestCacheRead)
-			output := max64(0, proj.LatestOutput)
-			used := fresh + cacheRead
-			free := max64(0, limit-used)
-			pctVal := math.Min(100, (float64(used)/float64(limit))*100)
 
 			ui.Column(c).FillWidth().Gap(8).Padding(9, 10).Radius(10).Background(p.cardSub).Border(1, p.line).Children(func() {
 				// Context Hero
@@ -1258,7 +1345,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 	}
 
 	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
-		ui.Column(c).FillWidth().Gap(10).Children(func() {
+		ui.Column(c).FillWidth().Padding(0, 16, 0, 0).Gap(10).Children(func() {
 			// Appearance
 			ui.Column(c).FillWidth().Padding(12).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
 				ui.Text(c, s.tr("settings.appearance")).FontSize(11.5).Bold().TextColor(p.fg)
@@ -1517,6 +1604,106 @@ func (s *uiState) savePrefs() {
 	_ = os.WriteFile(path, data, 0o600)
 }
 
+var (
+	trackRingSVG = ui.MustParseSVG([]byte(`<svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" stroke-width="3.2"/></svg>`))
+	ringSVGMu    sync.Mutex
+	ringSVGCache = make(map[int]*ui.SVG)
+)
+
+func getContextArcSVG(pct int) *ui.SVG {
+	if pct <= 0 {
+		return nil
+	}
+	if pct >= 100 {
+		return trackRingSVG
+	}
+	ringSVGMu.Lock()
+	if cached, ok := ringSVGCache[pct]; ok {
+		ringSVGMu.Unlock()
+		return cached
+	}
+	ringSVGMu.Unlock()
+
+	angle := 2 * math.Pi * float64(pct) / 100.0
+	x := 18.0 + 14.0*math.Sin(angle)
+	y := 18.0 - 14.0*math.Cos(angle)
+	largeArc := 0
+	if pct > 50 {
+		largeArc = 1
+	}
+	raw := fmt.Sprintf(
+		`<svg viewBox="0 0 36 36"><path d="M 18 4 A 14 14 0 %d 1 %.3f %.3f" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>`,
+		largeArc, x, y,
+	)
+	svg := ui.MustParseSVG([]byte(raw))
+	ringSVGMu.Lock()
+	ringSVGCache[pct] = svg
+	ringSVGMu.Unlock()
+	return svg
+}
+
+func renderContextRing(c *ui.Context, p palette, pct int) {
+	ringCol := p.accent
+	if pct >= 80 {
+		ringCol = p.danger
+	} else if pct >= 55 {
+		ringCol = p.warnText
+	}
+	arcSVG := getContextArcSVG(pct)
+	ui.Box(c).Width(34).Height(34).Children(func() {
+		ui.Icon(c, trackRingSVG).Size(34, 34).TextColor(p.track)
+		if arcSVG != nil {
+			ui.Box(c).Absolute().Left(0).Top(0).Width(34).Height(34).Children(func() {
+				ui.Icon(c, arcSVG).Size(34, 34).TextColor(ringCol)
+			})
+		}
+		ui.Box(c).Absolute().Left(0).Top(0).Width(34).Height(34).Center().Children(func() {
+			ui.Text(c, formatPctInt(pct)).FontSize(8.5).Bold().TextColor(p.fg)
+		})
+	})
+}
+
+func shortenHomePath(p string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return p
+	}
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+string(os.PathSeparator)) {
+		return "~" + p[len(home):]
+	}
+	return p
+}
+
+func renderMiniQuotaRow(c *ui.Context, p palette, label string, buckets map[string]usage.Bucket, primary, fallback string) {
+	b, ok := buckets[primary]
+	if !ok {
+		b, ok = buckets[fallback]
+	}
+	if !ok {
+		return
+	}
+	pct := b.Percent
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	barColor := ui.Hex(quotaColorHex(pct))
+	ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
+		ui.Text(c, label).FontSize(9.2).TextColor(p.muted).Width(10)
+		ui.Box(c).Width(28).Height(4).Radius(999).Background(p.track).Children(func() {
+			if pct > 0 {
+				ui.Box(c).WidthPercent(float32(pct)).Height(4).Radius(999).Background(barColor)
+			}
+		})
+		ui.Text(c, formatPctInt(pct)).FontSize(9.5).TextColor(p.fg).Width(28)
+	})
+}
+
 func (s *uiState) renderQuotaBar(c *ui.Context, p palette, key string, b usage.Bucket) {
 	pct := b.Percent
 	if pct < 0 {
@@ -1528,12 +1715,13 @@ func (s *uiState) renderQuotaBar(c *ui.Context, p palette, key string, b usage.B
 	barColor := ui.Hex(quotaColorHex(pct))
 	ui.Column(c).FillWidth().Gap(3).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-			ui.Text(c, s.bucketLabel(key)).FontSize(10).TextColor(p.fg)
-			rightText := formatPctInt(pct)
+			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+				ui.Text(c, s.bucketLabel(key)).FontSize(10).TextColor(p.fg)
+				ui.Text(c, formatPctInt(pct)).FontSize(10).Bold().TextColor(p.fg)
+			})
 			if resetText := s.formatResetCountdown(pct, b.Reset); resetText != "" {
-				rightText = rightText + " · " + resetText
+				ui.Text(c, resetText).FontSize(9.5).TextColor(p.muted)
 			}
-			ui.Text(c, rightText).FontSize(9.5).TextColor(p.muted)
 		})
 		ui.Box(c).FillWidth().Height(5).Radius(999).Background(p.track).Children(func() {
 			if pct > 0 {
@@ -1554,12 +1742,14 @@ func renderModelTags(c *ui.Context, p palette, members []string, isCurrent bool,
 			isSelected := isCurrent && activeLower != "" && strings.Contains(activeLower, strings.ToLower(name))
 			bg := p.soft
 			fg := p.muted
+			label := name
 			if isSelected {
 				bg = p.accentSoft
 				fg = p.accent
+				label = "★ " + name
 			}
 			ui.Box(c).Padding(2, 6).Radius(5).Background(bg).Children(func() {
-				txt := ui.Text(c, name).FontSize(9.2).TextColor(fg)
+				txt := ui.Text(c, label).FontSize(9.2).TextColor(fg)
 				if isSelected {
 					txt.Bold()
 				}

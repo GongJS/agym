@@ -51,11 +51,16 @@ var messagesZH = map[string]string{
 	"status.rotationOn":       "已开启 %s 自动轮换",
 	"status.rotationOff":      "已关闭 %s 自动轮换",
 	"account.current":         "当前",
+	"account.switch":          "切换",
 	"account.needLogin":       "需登录",
-	"account.rotation":        "自动轮换",
-	"account.remove":          "移除",
+	"account.inPool":          "轮换池",
+	"account.rotation":        "加入自动轮换",
+	"account.remove":          "移除...",
 	"account.confirmRemove":   "确认移除",
 	"account.cancelRemove":    "取消",
+	"account.checkedAt":       "检查于 %s · %s",
+	"account.notChecked":      "尚未检查",
+	"account.refresh":         "刷新",
 	"account.addToggle":       "添加或登录新账户",
 	"account.collapse":        "收起",
 	"account.staleBadge":      "过期",
@@ -150,11 +155,16 @@ var messagesEN = map[string]string{
 	"status.rotationOn":       "Rotation enabled for %s",
 	"status.rotationOff":      "Rotation disabled for %s",
 	"account.current":         "Current",
+	"account.switch":          "Switch",
 	"account.needLogin":       "Sign in",
+	"account.inPool":          "Pool",
 	"account.rotation":        "Auto-rotate",
-	"account.remove":          "Remove",
+	"account.remove":          "Remove...",
 	"account.confirmRemove":   "Confirm",
 	"account.cancelRemove":    "Cancel",
+	"account.checkedAt":       "Checked at %s · %s",
+	"account.notChecked":      "Not checked yet",
+	"account.refresh":         "Refresh",
 	"account.addToggle":       "Add or sign in account",
 	"account.collapse":        "Collapse",
 	"account.staleBadge":      "Stale",
@@ -292,7 +302,27 @@ func (s *uiState) formatResetCountdown(pct int, resetStr string) string {
 			if pct >= 100 && hours >= 24 {
 				return s.tr("quota.available")
 			}
-			return s.tr("quota.refreshesIn", fmt.Sprintf("%dh %dm", hours, mins))
+			var durText string
+			if hours >= 24 {
+				days := hours / 24
+				remHours := hours % 24
+				unitDay := "天"
+				if s.lang == langEN {
+					unitDay = "d"
+				}
+				if remHours > 0 {
+					durText = fmt.Sprintf("%d%s%dh", days, unitDay, remHours)
+				} else {
+					durText = fmt.Sprintf("%d%s", days, unitDay)
+				}
+			} else if hours > 0 {
+				durText = fmt.Sprintf("%dh%dm", hours, mins)
+			} else if mins > 0 {
+				durText = fmt.Sprintf("%dm", mins)
+			} else {
+				return s.tr("quota.resetsSoon")
+			}
+			return s.tr("quota.refreshesIn", durText)
 		}
 		return raw
 	}
