@@ -96,12 +96,12 @@ func Run() error {
 		win = mygo.NewFlyout(mygo.FlyoutOptions{
 			Tray:       tray,
 			Width:      396,
-			Height:     320,
+			Height:     280,
 			MinWidth:   396,
 			MaxWidth:   396,
-			MinHeight:  220,
+			MinHeight:  240,
 			MaxHeight:  680,
-			FitContent: true,
+			FitContent: false,
 			Focusable:  true,
 			Hidden:     true,
 			Popover:    true,
@@ -145,18 +145,19 @@ func Run() error {
 		})
 		win.OnShow(func() {
 			if state.isProjectsTab() {
-				state.loadProjectsAsync(win, false)
 				startPolling()
 			} else {
 				state.loadAccountsAsync(win, false)
 			}
+			// 每次打开托盘弹窗时，后台静默更新一次项目列表与账户额度
+			state.loadProjectsAsync(win, false)
+			state.refreshQuotasBackgroundAsync(win)
 		})
 		win.OnHide(func() {
 			stopPolling()
 		})
 
 		state.loadAccountsAsync(win, false)
-		state.refreshQuotasAsync(win)
 	})
 
 	return mygo.App.Run()
@@ -174,7 +175,28 @@ func (s *uiState) triggerUpdate(win *mygo.Window) {
 	if win == nil {
 		return
 	}
+	s.syncWindowHeight(win)
 	win.Update(func() {})
+}
+
+func (s *uiState) syncWindowHeight(win *mygo.Window) {
+	if win == nil {
+		return
+	}
+	s.mu.Lock()
+	hasContent := len(s.accounts) > 0 || len(s.projects) > 0
+	targetH := 280
+	if hasContent {
+		targetH = 540
+	}
+	changed := s.lastWindowHeight != targetH
+	if changed {
+		s.lastWindowHeight = targetH
+	}
+	s.mu.Unlock()
+	if changed {
+		win.SetSize(396, targetH)
+	}
 }
 
 func (s *uiState) isProjectsTab() bool {
@@ -214,6 +236,32 @@ func (s *uiState) loadAccountsAsync(win *mygo.Window, showRefreshed bool) {
 		}
 		s.mu.Unlock()
 		s.triggerUpdate(win)
+	}()
+}
+
+func (s *uiState) refreshQuotasBackgroundAsync(win *mygo.Window) {
+	if s.svc == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.refreshing {
+		s.mu.Unlock()
+		return
+	}
+	s.refreshing = true
+	s.mu.Unlock()
+
+	go func() {
+		items, err := s.svc.RefreshQuotas()
+		s.mu.Lock()
+		s.refreshing = false
+		if err == nil {
+			s.accounts = items
+		}
+		s.mu.Unlock()
+		if err == nil {
+			s.triggerUpdate(win)
+		}
 	}()
 }
 
