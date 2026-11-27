@@ -271,34 +271,34 @@ func (s *uiState) view(c *ui.Context) {
 
 			ui.Box(c).Grow(1)
 
-			// Bottom-left active account card
+			// Bottom-left active account card (2 rows: avatar+email, model)
 			if ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(10).Background(p.card).Border(1, p.line).Cursor(ui.CursorPointer).Children(func() {
-				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-					initial := "?"
-					if activeEmail != "" {
-						initial = strings.ToUpper(activeEmail[:1])
-					}
-					ui.Box(c).Width(28).Height(28).Radius(14).Background(p.accentSoft).Center().Children(func() {
-						ui.Text(c, initial).FontSize(12).Bold().TextColor(p.accent)
-					})
-					ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
-						emailLabel := activeEmail
-						if emailLabel == "" {
-							emailLabel = s.tr("sidebar.noAccount")
-						}
-						ui.Text(c, emailLabel).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
-						modelLabel := activeModel
-						if modelLabel == "" {
-							modelLabel = s.tr("sidebar.noModel")
-						}
-						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
-							dotCol := p.muted
-							if activeEmail != "" {
-								dotCol = p.ok
-							}
-							ui.Box(c).Width(5).Height(5).Radius(3).Background(dotCol)
-							ui.Text(c, modelLabel).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+				initial := "?"
+				if activeEmail != "" {
+					initial = strings.ToUpper(activeEmail[:1])
+				}
+				emailLabel := activeEmail
+				if emailLabel == "" {
+					emailLabel = s.tr("sidebar.noAccount")
+				}
+				modelLabel := activeModel
+				if modelLabel == "" {
+					modelLabel = s.tr("sidebar.noModel")
+				}
+				dotCol := p.muted
+				if activeEmail != "" {
+					dotCol = p.ok
+				}
+				ui.Column(c).FillWidth().Gap(5).Children(func() {
+					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+						ui.Box(c).Width(20).Height(20).Radius(10).Background(p.accentSoft).Center().Children(func() {
+							ui.Text(c, initial).FontSize(10).Bold().TextColor(p.accent)
 						})
+						ui.Text(c, emailLabel).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+					})
+					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(5).Padding(0, 2).Children(func() {
+						ui.Box(c).Width(5).Height(5).Radius(3).Background(dotCol)
+						ui.Text(c, modelLabel).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 					})
 				})
 			}).Clicked() {
@@ -1427,12 +1427,9 @@ func (s *uiState) applyShortcut(win *mygo.Window) {
 		return
 	}
 	err := mygo.GlobalShortcut.Register(accel, func() {
-		if win.IsVisible() && !win.IsMinimized() {
-			win.Minimize()
+		if win.IsVisible() {
+			win.Hide()
 			return
-		}
-		if win.IsMinimized() {
-			win.Restore()
 		}
 		win.Show()
 		win.Focus()

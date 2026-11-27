@@ -34,7 +34,7 @@ func Run() error {
 	svc := appservice.NewAccounts(roster)
 	state := newUIState(svc)
 
-	mygo.App.SetActivationPolicy(mygo.ActivationPolicyRegular)
+	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
 	switch state.themeMode() {
 	case "light":
@@ -95,6 +95,16 @@ func Run() error {
 	})
 
 	mygo.App.WhenReady(func() {
+		mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
+			{
+				Label: "agym",
+				Submenu: []*mygo.MenuItem{
+					{Role: mygo.RoleQuit},
+				},
+			},
+			{Role: mygo.RoleEditMenu},
+		}))
+
 		tray, trayErr := mygo.NewTray(mygo.TrayOptions{
 			ID:             "agym-tray",
 			Icon:           trayIconPNG,
@@ -114,6 +124,7 @@ func Run() error {
 			MaxHeight:         820,
 			Hidden:            false,
 			TitleBarStyle:     mygo.TitleBarHiddenInset,
+			DisableMinimize:   true,
 			DisableMaximize:   true,
 			DisableFullScreen: true,
 			Content:           ui.View(state.view),
