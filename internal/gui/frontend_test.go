@@ -2,6 +2,7 @@ package gui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/gongjs/agym/internal/appservice"
@@ -51,13 +52,33 @@ func TestNativeUIRendersAccountsAndProjects(t *testing.T) {
 		t.Fatal("expected non-empty rendered image for projects tab")
 	}
 
-	// Verify polished states: error banner, un-switchable account, confirm remove, expanded onboarding
+	// Verify polished states: error banner, un-switchable account, confirm remove, expanded onboarding, stale & failed quota
 	state.tabIndex = 0
-	state.accounts = append(state.accounts, appservice.AccountView{
-		Email:         "secondary@example.com",
-		Current:       false,
-		HasSavedLogin: false,
-	})
+	state.accounts = append(state.accounts,
+		appservice.AccountView{
+			Email:         "stale@example.com",
+			Current:       false,
+			HasSavedLogin: true,
+			Quota: &usage.AccountView{
+				Status:    "stale",
+				CheckedAt: time.Now().Add(-15 * time.Minute).Unix(),
+				Error:     "agy usage query timed out",
+				Buckets: map[string]usage.Bucket{
+					"g5": {Percent: 45, Reset: "2h"},
+				},
+			},
+		},
+		appservice.AccountView{
+			Email:         "secondary@example.com",
+			Current:       false,
+			HasSavedLogin: false,
+			Quota: &usage.AccountView{
+				Status: "timeout",
+				Error:  "agy usage query timed out",
+			},
+		},
+	)
+	state.expandedAccounts["stale@example.com"] = true
 	state.expandedAccounts["secondary@example.com"] = true
 	state.confirmRemoveEmail = "secondary@example.com"
 	state.showAddAccount = true

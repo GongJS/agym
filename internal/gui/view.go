@@ -432,6 +432,11 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 						ui.Text(c, s.tr("account.needLogin")).FontSize(9.5).Bold().TextColor(p.warnText)
 					})
 				}
+				if acc.Quota != nil && acc.Quota.Status == "stale" {
+					ui.Box(c).Padding(2, 6).Radius(999).Background(p.warnBg).Children(func() {
+						ui.Text(c, s.tr("account.staleBadge")).FontSize(9.5).Bold().TextColor(p.warnText)
+					})
+				}
 				tierLabel := ""
 				if acc.Quota != nil {
 					tierLabel = formatTierLabel(acc.Quota.TierID, acc.Quota.TierName)
@@ -479,8 +484,21 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 		if expanded {
 			ui.Column(c).FillWidth().Gap(9).Padding(9, 10).Radius(9).Background(p.cardSub).Border(1, p.line).Children(func() {
 				if acc.Quota == nil || len(acc.Quota.Buckets) == 0 {
-					ui.Text(c, s.tr("account.noQuota")).FontSize(10).TextColor(p.muted)
+					if acc.Quota != nil && acc.Quota.Status != "" && acc.Quota.Status != "ok" {
+						ui.Text(c, s.quotaFailureMessage(acc.Quota.Status, acc.Quota.Error)).FontSize(10).TextColor(p.warnText)
+					} else {
+						ui.Text(c, s.tr("account.noQuota")).FontSize(10).TextColor(p.muted)
+					}
 				} else {
+					if acc.Quota.Status == "stale" {
+						notice := s.tr("account.staleNoticeNoTime")
+						if age := s.formatRelativeAge(acc.Quota.CheckedAt); age != "" {
+							notice = s.tr("account.staleNotice", age)
+						}
+						ui.Box(c).FillWidth().Padding(5, 8).Radius(7).Background(p.warnBg).Children(func() {
+							ui.Text(c, notice).FontSize(9.5).TextColor(p.warnText)
+						})
+					}
 					type quotaGroupSpec struct {
 						title   string
 						members []string

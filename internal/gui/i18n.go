@@ -41,7 +41,21 @@ var messagesZH = map[string]string{
 	"account.cancelRemove":    "取消",
 	"account.addToggle":       "添加或登录新账户",
 	"account.collapse":        "收起",
+	"account.staleBadge":      "过期",
+	"account.staleNotice":     "刷新失败，当前显示 %s 缓存数据",
+	"account.staleNoticeNoTime": "刷新失败，当前显示缓存数据",
 	"account.noQuota":         "暂无额度数据（可点击卡片刷新按钮）",
+	"quota.status.timeout":    "上次刷新超时，请点击卡片刷新重试",
+	"quota.status.auth_failed": "登录授权已失效，请重新登录该账户",
+	"quota.status.no_keychain": "未找到已保存的登录凭证，请重新登录",
+	"quota.status.ineligible": "当前账户暂无使用资格",
+	"quota.status.unsupported_region": "当前地区暂不支持",
+	"quota.status.parse_err":  "额度数据解析失败，请稍后重试",
+	"quota.status.error":      "上次刷新失败，请点击卡片刷新重试",
+	"age.justNow":             "刚刚",
+	"age.minutes":             "%d 分钟前",
+	"age.hours":               "%d 小时前",
+	"age.days":                "%d 天前",
 	"quota.bucket.g5":         "5 小时",
 	"quota.bucket.gw":         "每周",
 	"quota.bucket.c5":         "5 小时",
@@ -109,7 +123,21 @@ var messagesEN = map[string]string{
 	"account.cancelRemove":    "Cancel",
 	"account.addToggle":       "Add or sign in account",
 	"account.collapse":        "Collapse",
+	"account.staleBadge":      "Stale",
+	"account.staleNotice":     "Refresh failed; showing cached data from %s",
+	"account.staleNoticeNoTime": "Refresh failed; showing cached data",
 	"account.noQuota":         "No quota data yet (click card refresh)",
+	"quota.status.timeout":    "Last refresh timed out; click card refresh to retry",
+	"quota.status.auth_failed": "Sign-in expired; please sign in again",
+	"quota.status.no_keychain": "No saved login found; please sign in",
+	"quota.status.ineligible": "Account is not eligible",
+	"quota.status.unsupported_region": "Unsupported region",
+	"quota.status.parse_err":  "Unrecognized usage report; try again later",
+	"quota.status.error":      "Last refresh failed; click card refresh to retry",
+	"age.justNow":             "just now",
+	"age.minutes":             "%dm ago",
+	"age.hours":               "%dh ago",
+	"age.days":                "%dd ago",
 	"quota.bucket.g5":         "5h",
 	"quota.bucket.gw":         "Weekly",
 	"quota.bucket.c5":         "5h",
@@ -238,4 +266,34 @@ func (s *uiState) formatResetCountdown(pct int, resetStr string) string {
 		return s.tr("quota.exhausted")
 	}
 	return s.tr("quota.available")
+}
+
+func (s *uiState) formatRelativeAge(checkedAt int64) string {
+	if checkedAt <= 0 {
+		return ""
+	}
+	diff := time.Since(time.Unix(checkedAt, 0))
+	if diff < time.Minute {
+		return s.tr("age.justNow")
+	}
+	mins := int(diff.Minutes())
+	if mins < 60 {
+		return s.tr("age.minutes", mins)
+	}
+	hours := mins / 60
+	if hours < 24 {
+		return s.tr("age.hours", hours)
+	}
+	return s.tr("age.days", hours/24)
+}
+
+func (s *uiState) quotaFailureMessage(status, errMsg string) string {
+	key := "quota.status." + strings.TrimSpace(status)
+	if msg := s.tr(key); msg != key {
+		return msg
+	}
+	if strings.TrimSpace(errMsg) != "" {
+		return errMsg
+	}
+	return s.tr("quota.status.error")
 }
