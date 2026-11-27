@@ -2,22 +2,42 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-A lightweight macOS menu bar tray app and CLI for managing multiple `agy` Google accounts, monitoring Gemini/Claude quota windows, and safely switching Keychain credentials.
+A lightweight, pure-Go menu bar tray app and CLI for managing multiple `agy` Google accounts, monitoring Gemini/Claude quota windows, tracking per-workspace context window & token usage, and safely switching Keychain credentials.
 
-Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) native GPU UI and menu bar popover.
+Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) native GPU UI (macOS Metal / Windows Direct3D 11) — **zero WebView processes** and **zero CGO**.
+
+## Screenshots
+
+| Accounts | Projects |
+| :---: | :---: |
+| <img src="./docs/screenshots/accounts.png" alt="Accounts Tab" width="360" /> | <img src="./docs/screenshots/projects.png" alt="Projects Tab" width="360" /> |
 
 ## Features
 
-- **Menu Bar UI & CLI in One Binary**: Run `agym` (or `agym ui`) for the macOS menu bar popup, or invoke subcommands directly from the terminal.
-- **Safe Keychain Switching**: Stores account backups under `gemini-agy-backup/<email>` in macOS Keychain and coordinates all reads/writes with a cross-process `slot.lock`. Raw tokens never leave the backend.
-- **Official OAuth Onboarding**: Sign in to new accounts directly from the tray via official `agy` OAuth, with automatic quota fetching right after an account is added.
-- **Quota & Model Visibility**: Displays Gemini and Claude 5-hour / weekly quota windows, subscription tier, exit region, and per-account model & thinking preferences.
-- **Bilingual UI**: Supports English and Simplified Chinese (`EN` / `中文` toggle, auto-detected from system locale).
-- **Session Handoff Supervisor**: Optional CLI `supervise` mode + Stop hook for quota-exhaustion account rotation in external terminals.
+- **Pure-Go Native GPU UI & CLI in One Binary**: Run `agym` (or `agym ui`) for the borderless menu bar popover, or invoke subcommands directly from the terminal. No `WKWebView` or browser helper processes.
+- **Accounts & Grouped Model Quotas**:
+  - Displays `Gemini` and `Claude · GPT` quota groups separately with supported model tags, `5h` / `Weekly` progress bars, reset countdowns, and subscription tiers (`Free` / `Google AI Pro` / `Ultra`).
+  - Highlights the active global `agy` model from `~/.gemini/antigravity-cli/settings.json`.
+  - Per-card `↻` refresh button, automatic background refresh on tray open (current account prioritized first), and zero-delay optimistic account switching.
+- **Projects Context & Token Monitor**:
+  - Dedicated **Projects** tab showing active (`Running`) and idle `agy` workspaces with an 80-cell (20×4) dot-matrix context window breakdown (`Fresh input`, `Cache read`, `Output`, `Free space`), cumulative tokens, and step counts.
+  - Incremental `transcript.jsonl` caching (`mtime + offset`) with 5-second live polling while viewing, plus one-click project dismissal (automatically re-appears when `agy` runs again in that workspace).
+- **Safe Keychain Switching & OAuth Onboarding**: Stores account backups under `gemini-agy-backup/<email>` in macOS Keychain with a cross-process `slot.lock`. Supports in-tray official `agy` OAuth sign-in. Raw tokens never leave the backend.
+- **Light / Dark Theme & Bilingual UI**: Built-in Sun/Moon theme toggle and `EN` / `中文` language toggle.
+- **Session Handoff Supervisor**: Optional CLI `supervise` mode + Stop hook for mid-conversation quota-exhaustion account rotation in external terminals.
+
+## Why Native PTY + Supervisor (vs. ACP Clients)
+
+| Dimension | `agym` (Native PTY + Supervisor & Pure-Go UI) | ACP-Based Clients |
+| :--- | :--- | :--- |
+| **Fidelity & Features** | Runs the official `agy` binary directly in a real PTY — 100% native tool approvals, MCP output, slash commands, shortcuts, and TUI rendering with zero protocol loss. | Must translate agent events into generic JSON-RPC messages and redraw UI; newly added CLI behaviors often lag or lose detail. |
+| **Multi-Account Rotation** | Built-in parent supervisor + Keychain slot swapping + Stop hook detection: automatically switches to a healthy account with remaining quota mid-conversation and resumes the exact `--conversation=<id>`. | Supports configuring multiple instances and switching manually, without automatic mid-conversation quota-exhaustion handoff. |
+| **Cross-Account & Project Awareness** | Aggregates per-account tiers (`Ultra`/`Pro`/`Free`), grouped model catalogs, active model, and live per-workspace context window / token usage in one lightweight tray app. | Probes quota per configured instance without unified cross-account comparison or live workspace context-window monitoring. |
+| **Zero Overhead & Upgrade-Safe** | Zero extra system prompts or wrapper token overhead, and zero WebView helper processes; immune to upstream `agy` UI/model/tool updates as long as CLI flags and Stop hooks remain intact. | May inject adapter prompts/tool schemas and requires protocol schema updates as upstream CLIs evolve. |
 
 ## Prerequisites
 
-- **macOS** (Keychain integration and native WebView tray)
+- **macOS** (Apple Silicon / Intel) or **Windows**
 - Official `agy` CLI installed (expected at `~/.local/bin/agy`)
 
 ## Installation
@@ -26,15 +46,6 @@ Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) nat
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GongJS/agym/main/install.sh | sh
-```
-
-### Homebrew (Tap)
-
-Once published to a Homebrew Tap:
-
-```sh
-brew install gongjs/tap/agym
-brew services start agym
 ```
 
 ### From Source
