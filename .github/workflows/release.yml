@@ -25,7 +25,7 @@ jobs:
           for ARCH in arm64 amd64; do
             STAGE="release/agym_${VERSION}_darwin_${ARCH}"
             mkdir -p "$STAGE"
-            CGO_ENABLED=0 GOOS=darwin GOARCH="$ARCH" go build -ldflags="-s -w" -o "$STAGE/agym" .
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$ARCH" go build -ldflags="-s -w -X github.com/gongjs/agym/internal/updater.Version=${GITHUB_REF_NAME}" -o "$STAGE/agym" .
             cp README.md README.zh-CN.md LICENSE "$STAGE/"
             tar -C "$STAGE" -czf "release/agym_${VERSION}_darwin_${ARCH}.tar.gz" agym README.md README.zh-CN.md LICENSE
           done
@@ -52,7 +52,7 @@ jobs:
           $env:CGO_ENABLED = "0"
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
-          go build -ldflags="-s -w" -o "$STAGE/agym.exe" .
+          go build -ldflags="-s -w -X github.com/gongjs/agym/internal/updater.Version=$env:GITHUB_REF_NAME" -o "$STAGE/agym.exe" .
           Copy-Item README.md, README.zh-CN.md, LICENSE $STAGE
           Compress-Archive -Path "$STAGE/*" -DestinationPath "release/agym_${VERSION}_windows_amd64.zip"
       - uses: actions/upload-artifact@v6

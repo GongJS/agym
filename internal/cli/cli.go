@@ -10,6 +10,7 @@ import (
 
 	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/session"
+	"github.com/gongjs/agym/internal/updater"
 	"github.com/gongjs/agym/internal/usage"
 	"github.com/spf13/cobra"
 )
@@ -194,6 +195,42 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 		newSessionForwardCommand("remove-hook", "Remove only the agym Stop hook", false, stdout, stderr),
 		newSessionForwardCommand("supervise [--pinned] [--] <agy arguments...>", "Run official agy in an external terminal with safe handoff", true, stdout, stderr),
 		newSessionForwardCommand("hook", "Internal command invoked by the Stop hook", false, stdout, stderr),
+		&cobra.Command{
+			Use:   "version",
+			Short: "Print the installed agym version",
+			Args:  noExtraArgs(),
+			RunE: func(_ *cobra.Command, _ []string) error {
+				fmt.Fprintln(stdout, updater.Version)
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:     "update",
+			Aliases: []string{"upgrade"},
+			Short:   "Check for and install the latest agym release from GitHub",
+			Args:    noExtraArgs(),
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				ctx := cmd.Context()
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				info, err := updater.CheckLatest(ctx, true)
+				if err != nil {
+					return err
+				}
+				if updater.Version != "dev" && !updater.IsNewer(info.Version, updater.Version) {
+					fmt.Fprintf(stdout, "agym is up to date (%s)\n", updater.Version)
+					return nil
+				}
+				fmt.Fprintf(stdout, "Updating agym to %s...\n", info.Version)
+				installed, err := updater.SelfUpdate(ctx)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(stdout, "Updated agym to %s. Restart `agym ui` if it is running.\n", installed)
+				return nil
+			},
+		},
 	)
 	return root
 }

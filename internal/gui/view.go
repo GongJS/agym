@@ -16,6 +16,7 @@ import (
 	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/appservice"
 	"github.com/gongjs/agym/internal/projects"
+	"github.com/gongjs/agym/internal/updater"
 	"github.com/gongjs/agym/internal/usage"
 )
 
@@ -154,6 +155,12 @@ type uiState struct {
 	shortcutInput     string
 	shortcutRecording bool
 	registeredAccel   string
+	updateChecking    bool
+	updateApplying    bool
+	updateAvailable   bool
+	latestVersion     string
+	latestURL         string
+	updateNotice      string
 }
 
 func newUIState(svc *appservice.Accounts) *uiState {
@@ -202,6 +209,7 @@ func (s *uiState) view(c *ui.Context) {
 	statusMsg := s.statusMsg
 	statusErr := s.statusErr
 	menuOpen := s.sidebarAccountMenuOpen
+	updateAvail := s.updateAvailable
 	win := s.win
 	s.mu.Unlock()
 
@@ -269,9 +277,12 @@ func (s *uiState) view(c *ui.Context) {
 						}
 						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 							ui.Icon(c, item.icon).Size(14, 14).TextColor(col)
-							txt := ui.Text(c, item.label).FontSize(11.5).TextColor(col)
+							txt := ui.Text(c, item.label).FontSize(11.5).TextColor(col).Grow(1).Shrink(1)
 							if active {
 								txt.Bold()
+							}
+							if item.idx == 2 && updateAvail {
+								ui.Box(c).Width(6).Height(6).Radius(3).Background(p.danger)
 							}
 						})
 					}).Clicked() && !active {
@@ -1537,6 +1548,12 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 	scEnabled := s.shortcutEnabled
 	scAccel := s.shortcutAccel
 	scRecording := s.shortcutRecording
+	updChecking := s.updateChecking
+	updApplying := s.updateApplying
+	updAvail := s.updateAvailable
+	latestVer := s.latestVersion
+	latestURL := s.latestURL
+	updNotice := s.updateNotice
 	statusMsg := s.statusMsg
 	statusErr := s.statusErr
 	win := s.win
@@ -1709,6 +1726,53 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 						}
 					}
 				})
+			})
+
+			// About & Updates
+			ui.Column(c).FillWidth().Padding(12).Gap(8).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+					ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+						ui.Text(c, s.tr("settings.about")).FontSize(11.5).Bold().TextColor(p.fg)
+						ui.Box(c).Padding(2, 6).Radius(999).Background(p.soft).Children(func() {
+							ui.Text(c, updater.Version).FontSize(9.5).TextColor(p.muted)
+						})
+					})
+					checkLabel := s.tr("settings.checkUpdate")
+					if updChecking {
+						checkLabel = s.tr("settings.checkingUpdate")
+					}
+					if ui.ButtonBase(c).Padding(4, 9).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Disabled(updChecking || updApplying).Children(func() {
+						ui.Text(c, checkLabel).FontSize(9.8).Bold().TextColor(p.fg)
+					}).Clicked() {
+						s.checkForUpdatesAsync(win, true)
+					}
+				})
+
+				if updAvail && latestVer != "" {
+					ui.Column(c).FillWidth().Gap(7).Padding(8, 9).Radius(8).Background(p.accentSoft).Children(func() {
+						ui.Text(c, s.tr("settings.updateAvail", latestVer)).FontSize(10.5).Bold().TextColor(p.accent)
+						ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+							updLabel := s.tr("settings.updateNow")
+							if updApplying {
+								updLabel = s.tr("settings.updating")
+							}
+							if ui.ButtonBase(c).Padding(5, 10).Radius(7).Background(p.accent).Cursor(ui.CursorPointer).Disabled(updApplying).Children(func() {
+								ui.Text(c, updLabel).FontSize(10).Bold().TextColor(ui.RGB(255, 255, 255))
+							}).Clicked() {
+								s.selfUpdateAsync(win)
+							}
+							if latestURL != "" {
+								if ui.ButtonBase(c).Padding(5, 10).Radius(7).Background(p.card).Cursor(ui.CursorPointer).Children(func() {
+									ui.Text(c, s.tr("settings.releaseNotes")).FontSize(10).TextColor(p.fg)
+								}).Clicked() {
+									go func(u string) { _ = mygo.Shell.OpenExternal(u) }(latestURL)
+								}
+							}
+						})
+					})
+				} else if updNotice != "" {
+					ui.Text(c, updNotice).FontSize(9.8).TextColor(p.muted)
+				}
 			})
 		})
 	})

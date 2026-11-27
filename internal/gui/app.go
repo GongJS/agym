@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/gongjs/agym/internal/accounts"
 	"github.com/gongjs/agym/internal/appservice"
 	"github.com/gongjs/agym/internal/projects"
+	"github.com/gongjs/agym/internal/updater"
 )
 
 //go:embed tray-template.png
@@ -184,12 +186,14 @@ func Run() error {
 			// 每次打开托盘弹窗时，后台静默更新一次项目列表与账户额度
 			state.loadProjectsAsync(win, false)
 			state.refreshQuotasBackgroundAsync(win)
+			state.checkForUpdatesAsync(win, false)
 		})
 		win.OnHide(func() {
 			stopPolling()
 		})
 
 		state.loadAccountsAsync(win, false)
+		state.checkForUpdatesAsync(win, false)
 	})
 
 	return mygo.App.Run()
@@ -413,6 +417,91 @@ func readCurrentAgyModel() string {
 		return ""
 	}
 	return strings.TrimSpace(cfg.Model)
+}
+
+func (s *uiState) checkForUpdatesAsync(win *mygo.Window, manual bool) {
+	s.mu.Lock()
+	if s.updateChecking || s.updateApplying {
+		s.mu.Unlock()
+		return
+	}
+	s.updateChecking = true
+	if manual {
+		s.updateNotice = ""
+	}
+	s.mu.Unlock()
+	if manual {
+		s.triggerUpdate(win)
+	}
+
+	go func() {
+		info, err := updater.CheckLatest(context.Background(), manual)
+		s.mu.Lock()
+		s.updateChecking = false
+		if err != nil {
+			if manual {
+				s.statusMsg = err.Error()
+				s.statusErr = true
+			}
+			s.mu.Unlock()
+			if manual {
+				s.triggerUpdate(win)
+			}
+			return
+		}
+		newer := updater.IsNewer(info.Version, updater.Version)
+		s.updateAvailable = newer
+		s.latestVersion = info.Version
+		s.latestURL = info.URL
+		if manual {
+			if newer {
+				s.updateNotice = ""
+			} else if updater.Version == "dev" {
+				s.updateNotice = s.tr("settings.devVersion", info.Version)
+			} else {
+				s.updateNotice = s.tr("settings.upToDate", updater.Version)
+			}
+		}
+		s.mu.Unlock()
+		if newer || manual {
+			s.triggerUpdate(win)
+		}
+	}()
+}
+
+func (s *uiState) selfUpdateAsync(win *mygo.Window) {
+	s.mu.Lock()
+	if s.updateApplying {
+		s.mu.Unlock()
+		return
+	}
+	s.updateApplying = true
+	s.statusMsg = s.tr("settings.updating")
+	s.statusErr = false
+	s.mu.Unlock()
+	s.triggerUpdate(win)
+
+	go func() {
+		_, err := updater.SelfUpdate(context.Background())
+		if err != nil {
+			s.mu.Lock()
+			s.updateApplying = false
+			s.statusMsg = err.Error()
+			s.statusErr = true
+			s.mu.Unlock()
+			s.triggerUpdate(win)
+			return
+		}
+		exePath, exeErr := os.Executable()
+		if exeErr == nil {
+			if resolved, rErr := filepath.EvalSymlinks(exePath); rErr == nil {
+				exePath = resolved
+			}
+			cmd := exec.Command(exePath, "ui")
+			_ = cmd.Start()
+		}
+		mygo.App.Quit()
+	}()
 }
 
 func (s *uiState) applyProjectListLocked(items []projects.ProjectView) {
