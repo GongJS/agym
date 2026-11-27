@@ -54,9 +54,19 @@ type transcriptSnapshot struct {
 	lastStatus      string
 }
 
+type dbRunningCache struct {
+	modTime    int64
+	size       int64
+	walModTime int64
+	walSize    int64
+	running    map[string]bool
+}
+
 var (
 	cacheMu         sync.Mutex
 	transcriptCache = make(map[string]*transcriptSnapshot)
+	dbCacheMu       sync.Mutex
+	dbCache         = make(map[string]dbRunningCache)
 )
 
 // DefaultAgyDir returns the default antigravity-cli state directory (~/.gemini/antigravity-cli).
@@ -201,9 +211,28 @@ func readActivePresence(presenceDir string) map[string]bool {
 func readRunningFromDB(agyDir string) map[string]bool {
 	running := make(map[string]bool)
 	dbPath := filepath.Join(agyDir, "conversation_summaries.db")
-	if _, err := os.Stat(dbPath); err != nil {
+	info, err := os.Stat(dbPath)
+	if err != nil {
 		return running
 	}
+	var walMod, walSize int64
+	if walInfo, walErr := os.Stat(dbPath + "-wal"); walErr == nil {
+		walMod = walInfo.ModTime().UnixNano()
+		walSize = walInfo.Size()
+	}
+	modTime := info.ModTime().UnixNano()
+	size := info.Size()
+
+	dbCacheMu.Lock()
+	if cached, ok := dbCache[dbPath]; ok && cached.modTime == modTime && cached.size == size && cached.walModTime == walMod && cached.walSize == walSize {
+		for k, v := range cached.running {
+			running[k] = v
+		}
+		dbCacheMu.Unlock()
+		return running
+	}
+	dbCacheMu.Unlock()
+
 	sqliteBin, err := exec.LookPath("sqlite3")
 	if err != nil {
 		return running
@@ -227,6 +256,19 @@ func readRunningFromDB(agyDir string) map[string]bool {
 			running[cid] = true
 		}
 	}
+	cachedCopy := make(map[string]bool, len(running))
+	for k, v := range running {
+		cachedCopy[k] = v
+	}
+	dbCacheMu.Lock()
+	dbCache[dbPath] = dbRunningCache{
+		modTime:    modTime,
+		size:       size,
+		walModTime: walMod,
+		walSize:    walSize,
+		running:    cachedCopy,
+	}
+	dbCacheMu.Unlock()
 	return running
 }
 
@@ -271,7 +313,7 @@ func enrichFromTranscript(view *ProjectView, transcriptPath string, hasPresenceL
 	consumed := snap.offset
 	for {
 		line, readErr := reader.ReadBytes('\n')
-		if len(line) > 0 && (line[len(line)-1] == '\n' || readErr == io.EOF) {
+		if len(line) > 0 && line[len(line)-1] == '\n' {
 			consumed += int64(len(line))
 			parseTranscriptStep(snap, line)
 		}

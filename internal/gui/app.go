@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -257,41 +258,40 @@ func (s *uiState) loadAccountsAsync(win *mygo.Window, showRefreshed bool) {
 		return
 	}
 	s.mu.Lock()
+	if s.loadAccountsBusy {
+		s.loadAccountsAgain = true
+		s.mu.Unlock()
+		return
+	}
+	s.loadAccountsBusy = true
 	gen := s.switchGen
 	s.mu.Unlock()
+
 	go func() {
 		items, err := s.svc.ListAccounts()
 		activeModel := readCurrentAgyModel()
 		s.mu.Lock()
-		if s.switching || s.switchGen != gen {
-			s.mu.Unlock()
-			return
-		}
-		s.currentAgyModel = activeModel
-		if err != nil {
-			s.statusMsg = err.Error()
-			s.statusErr = true
-		} else {
-			s.accounts = items
-			if !s.initAccountExpand && len(items) > 0 {
-				s.initAccountExpand = true
-				for _, a := range items {
-					if a.Current {
-						s.expandedAccounts[a.Email] = true
-						break
-					}
-				}
-				if len(s.expandedAccounts) == 0 {
-					s.expandedAccounts[items[0].Email] = true
-				}
-			}
-			if showRefreshed {
+		s.loadAccountsBusy = false
+		again := s.loadAccountsAgain
+		s.loadAccountsAgain = false
+		if s.applyAccountsLocked(gen, items) {
+			s.currentAgyModel = activeModel
+			if err != nil {
+				s.statusMsg = err.Error()
+				s.statusErr = true
+			} else if showRefreshed {
 				s.statusMsg = s.tr("status.refreshed")
 				s.statusErr = false
 			}
+		} else if err != nil && !s.switching && s.switchGen == gen {
+			s.statusMsg = err.Error()
+			s.statusErr = true
 		}
 		s.mu.Unlock()
 		s.triggerUpdate(win)
+		if again {
+			s.loadAccountsAsync(win, false)
+		}
 	}()
 }
 
@@ -309,16 +309,16 @@ func (s *uiState) refreshQuotasBackgroundAsync(win *mygo.Window) {
 	s.mu.Unlock()
 
 	go func() {
-		items, err := s.svc.RefreshQuotas()
+		items, err := s.svc.RefreshQuotasIfDue()
 		activeModel := readCurrentAgyModel()
 		s.mu.Lock()
 		s.refreshing = false
-		if err == nil && !s.switching && s.switchGen == gen {
-			s.accounts = items
+		updated := err == nil && s.applyAccountsLocked(gen, items)
+		if updated {
 			s.currentAgyModel = activeModel
 		}
 		s.mu.Unlock()
-		if err == nil {
+		if updated {
 			s.triggerUpdate(win)
 		}
 	}()
@@ -329,10 +329,11 @@ func (s *uiState) refreshQuotasAsync(win *mygo.Window) {
 		return
 	}
 	s.mu.Lock()
-	if s.refreshing {
+	if s.refreshing || s.switching {
 		s.mu.Unlock()
 		return
 	}
+	gen := s.switchGen
 	s.refreshing = true
 	s.statusMsg = s.tr("status.refreshing")
 	s.statusErr = false
@@ -341,44 +342,19 @@ func (s *uiState) refreshQuotasAsync(win *mygo.Window) {
 
 	go func() {
 		items, err := s.svc.RefreshQuotas()
+		activeModel := readCurrentAgyModel()
 		s.mu.Lock()
 		s.refreshing = false
 		if err != nil {
 			s.statusMsg = err.Error()
 			s.statusErr = true
-		} else {
-			s.accounts = items
+		} else if s.applyAccountsLocked(gen, items) {
+			s.currentAgyModel = activeModel
 			s.statusMsg = s.tr("status.refreshed")
 			s.statusErr = false
 		}
 		s.mu.Unlock()
 		s.triggerUpdate(win)
-	}()
-}
-
-func (s *uiState) refreshCurrentAccountQuotaAsync(win *mygo.Window) {
-	if s.svc == nil {
-		return
-	}
-	s.mu.Lock()
-	if s.refreshing || s.currentQuotaBusy {
-		s.mu.Unlock()
-		return
-	}
-	s.currentQuotaBusy = true
-	s.mu.Unlock()
-
-	go func() {
-		items, err := s.svc.RefreshCurrentQuota()
-		s.mu.Lock()
-		s.currentQuotaBusy = false
-		if err == nil {
-			s.accounts = items
-		}
-		s.mu.Unlock()
-		if err == nil {
-			s.triggerUpdate(win)
-		}
 	}()
 }
 
@@ -439,30 +415,16 @@ func (s *uiState) pollExistingProjects(win *mygo.Window) {
 	if s.svc == nil {
 		return
 	}
-	s.mu.Lock()
-	existingCount := len(s.projects)
-	s.mu.Unlock()
-	if existingCount == 0 {
-		return
-	}
 	fresh, err := s.svc.ListProjects()
 	if err != nil {
 		return
 	}
-	byPath := make(map[string]projects.ProjectView, len(fresh))
-	for _, p := range fresh {
-		byPath[p.Path] = p
-	}
 	s.mu.Lock()
-	updated := make([]projects.ProjectView, len(s.projects))
-	for i, p := range s.projects {
-		if newer, ok := byPath[p.Path]; ok {
-			updated[i] = newer
-		} else {
-			updated[i] = p
-		}
+	if reflect.DeepEqual(s.projects, fresh) {
+		s.mu.Unlock()
+		return
 	}
-	s.projects = updated
+	s.applyProjectListLocked(fresh)
 	s.mu.Unlock()
 	s.triggerUpdate(win)
 }

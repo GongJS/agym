@@ -122,7 +122,9 @@ type uiState struct {
 	initProjectExpand bool
 	refreshing        bool
 	refreshingEmails  map[string]bool
-	currentQuotaBusy  bool
+	rotationBusy      map[string]bool
+	loadAccountsBusy  bool
+	loadAccountsAgain bool
 	switching         bool
 	switchGen         uint64
 	projectsLoaded     bool
@@ -146,9 +148,30 @@ func newUIState(svc *appservice.Accounts) *uiState {
 		expandedAccounts: make(map[string]bool),
 		expandedProjects: make(map[string]bool),
 		refreshingEmails: make(map[string]bool),
+		rotationBusy:     make(map[string]bool),
 	}
 	s.loadPrefs()
 	return s
+}
+
+func (s *uiState) applyAccountsLocked(gen uint64, items []appservice.AccountView) bool {
+	if s.switching || s.switchGen != gen {
+		return false
+	}
+	s.accounts = items
+	if !s.initAccountExpand && len(items) > 0 {
+		s.initAccountExpand = true
+		for _, a := range items {
+			if a.Current {
+				s.expandedAccounts[a.Email] = true
+				break
+			}
+		}
+		if len(s.expandedAccounts) == 0 {
+			s.expandedAccounts[items[0].Email] = true
+		}
+	}
+	return true
 }
 
 func (s *uiState) view(c *ui.Context) {
@@ -877,10 +900,11 @@ func (s *uiState) refreshSingleAccountAsync(win *mygo.Window, email string) {
 		return
 	}
 	s.mu.Lock()
-	if s.refreshingEmails[email] {
+	if s.refreshingEmails[email] || s.switching {
 		s.mu.Unlock()
 		return
 	}
+	gen := s.switchGen
 	s.refreshingEmails[email] = true
 	s.statusMsg = s.tr("status.refreshing")
 	s.statusErr = false
@@ -894,8 +918,7 @@ func (s *uiState) refreshSingleAccountAsync(win *mygo.Window, email string) {
 		if err != nil {
 			s.statusMsg = err.Error()
 			s.statusErr = true
-		} else {
-			s.accounts = items
+		} else if s.applyAccountsLocked(gen, items) {
 			s.statusMsg = s.tr("status.refreshed")
 			s.statusErr = false
 		}
@@ -905,9 +928,27 @@ func (s *uiState) refreshSingleAccountAsync(win *mygo.Window, email string) {
 }
 
 func (s *uiState) setRotationAsync(win *mygo.Window, email string, enabled bool) {
+	if s.svc == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.rotationBusy[email] {
+		s.mu.Unlock()
+		return
+	}
+	s.rotationBusy[email] = true
+	for i := range s.accounts {
+		if s.accounts[i].Email == email {
+			s.accounts[i].Rotation = enabled
+			break
+		}
+	}
+	s.mu.Unlock()
+
 	go func() {
 		err := s.svc.SetRotation(email, enabled)
 		s.mu.Lock()
+		delete(s.rotationBusy, email)
 		if err != nil {
 			s.statusMsg = err.Error()
 			s.statusErr = true

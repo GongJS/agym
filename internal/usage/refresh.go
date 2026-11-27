@@ -200,8 +200,10 @@ func (r *Refresher) refreshOne(ctx context.Context, runner Runner, cache *Cache,
 		if parseErr != nil {
 			return fmt.Errorf("current agy login is invalid: %w", parseErr)
 		}
+		originalMeta, _ := accounts.ParseLoginMetadata(original)
 
 		token := original
+		tokenMeta := originalMeta
 		if originalEmail != email {
 			token, readErr = slot.BackupRaw(ctx, email)
 			if errors.Is(readErr, accounts.ErrNotFound) {
@@ -217,6 +219,7 @@ func (r *Refresher) refreshOne(ctx context.Context, runner Runner, cache *Cache,
 			if backupErr != nil || backupEmail != email {
 				return fmt.Errorf("saved login backup does not match account %s", email)
 			}
+			tokenMeta, _ = accounts.ParseLoginMetadata(token)
 		}
 
 		defer func() {
@@ -227,10 +230,25 @@ func (r *Refresher) refreshOne(ctx context.Context, runner Runner, cache *Cache,
 				callbackErr = errors.Join(callbackErr, fmt.Errorf("read slot before restore: %w", readErr))
 				return
 			}
-			if current != original {
-				if restoreErr := slot.WriteCurrent(restoreCtx, original); restoreErr != nil {
-					callbackErr = errors.Join(callbackErr, fmt.Errorf("restore original agy login: %w", restoreErr))
+			if current == original {
+				return
+			}
+			if current != "" {
+				if currentMeta, metaErr := accounts.ParseLoginMetadata(current); metaErr == nil {
+					if token == original {
+						// Active account was probed in-place; if current changed validly, an external agy refreshed it.
+						return
+					}
+					if currentMeta.RefreshToken != "" &&
+						currentMeta.RefreshToken != tokenMeta.RefreshToken &&
+						currentMeta.RefreshToken != originalMeta.RefreshToken {
+						callbackErr = errors.Join(callbackErr, fmt.Errorf("active agy login changed externally during probe; skipping restore to preserve refreshed token"))
+						return
+					}
 				}
+			}
+			if restoreErr := slot.WriteCurrent(restoreCtx, original); restoreErr != nil {
+				callbackErr = errors.Join(callbackErr, fmt.Errorf("restore original agy login: %w", restoreErr))
 			}
 		}()
 

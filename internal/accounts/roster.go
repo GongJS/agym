@@ -139,16 +139,24 @@ func (r *Roster) Add(ctx context.Context, email string) (bool, error) {
 		}
 		return false, fmt.Errorf("check saved login for %s: %w", email, err)
 	}
-	accounts, err := readEmails(r.paths.AccountsFile)
-	if err != nil {
-		return false, err
-	}
-	for _, existing := range accounts {
-		if existing == email {
-			return false, nil
+	var added bool
+	err = r.withRosterLock(ctx, func() error {
+		accounts, err := readEmails(r.paths.AccountsFile)
+		if err != nil {
+			return err
 		}
-	}
-	return true, writeEmails(r.paths.AccountsFile, append(accounts, email))
+		for _, existing := range accounts {
+			if existing == email {
+				return nil
+			}
+		}
+		if err := writeEmails(r.paths.AccountsFile, append(accounts, email)); err != nil {
+			return err
+		}
+		added = true
+		return nil
+	})
+	return added, err
 }
 
 // AddCurrentAccount safely saves the active login as a backup and adds it to
@@ -211,18 +219,20 @@ func (r *Roster) Remove(email string) error {
 	if err != nil {
 		return err
 	}
-	accounts, err := readEmails(r.paths.AccountsFile)
-	if err != nil {
-		return err
-	}
-	manual, err := readEmails(r.paths.ManualOnlyFile)
-	if err != nil {
-		return err
-	}
-	if err := writeEmails(r.paths.AccountsFile, without(accounts, email)); err != nil {
-		return err
-	}
-	return writeEmails(r.paths.ManualOnlyFile, without(manual, email))
+	return r.withRosterLock(context.Background(), func() error {
+		accounts, err := readEmails(r.paths.AccountsFile)
+		if err != nil {
+			return err
+		}
+		manual, err := readEmails(r.paths.ManualOnlyFile)
+		if err != nil {
+			return err
+		}
+		if err := writeEmails(r.paths.AccountsFile, without(accounts, email)); err != nil {
+			return err
+		}
+		return writeEmails(r.paths.ManualOnlyFile, without(manual, email))
+	})
 }
 
 // SetRotation controls whether the account may be used in automatic rotation.
@@ -231,30 +241,42 @@ func (r *Roster) SetRotation(email string, enabled bool) error {
 	if err != nil {
 		return err
 	}
-	accounts, err := readEmails(r.paths.AccountsFile)
-	if err != nil {
-		return err
-	}
-	registered := false
-	for _, existing := range accounts {
-		if existing == email {
-			registered = true
-			break
+	return r.withRosterLock(context.Background(), func() error {
+		accounts, err := readEmails(r.paths.AccountsFile)
+		if err != nil {
+			return err
 		}
-	}
-	if !registered {
-		return fmt.Errorf("account is not in the roster: %s", email)
-	}
-	manual, err := readEmails(r.paths.ManualOnlyFile)
+		registered := false
+		for _, existing := range accounts {
+			if existing == email {
+				registered = true
+				break
+			}
+		}
+		if !registered {
+			return fmt.Errorf("account is not in the roster: %s", email)
+		}
+		manual, err := readEmails(r.paths.ManualOnlyFile)
+		if err != nil {
+			return err
+		}
+		if enabled {
+			manual = without(manual, email)
+		} else if !contains(manual, email) {
+			manual = append(manual, email)
+		}
+		return writeEmails(r.paths.ManualOnlyFile, manual)
+	})
+}
+
+func (r *Roster) withRosterLock(ctx context.Context, fn func() error) error {
+	lockPath := filepath.Join(filepath.Dir(r.paths.AccountsFile), "roster.lock")
+	lock, err := acquireSlotLock(ctx, lockPath, false)
 	if err != nil {
 		return err
 	}
-	if enabled {
-		manual = without(manual, email)
-	} else if !contains(manual, email) {
-		manual = append(manual, email)
-	}
-	return writeEmails(r.paths.ManualOnlyFile, manual)
+	defer lock.Close()
+	return fn()
 }
 
 func readEmails(path string) ([]string, error) {

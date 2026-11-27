@@ -92,12 +92,17 @@ func (s *Accounts) RemoveProject(workspace string) error {
 // RefreshQuotas performs a force refresh for the current account first and then
 // refreshes remaining accounts asynchronously in the background.
 func (s *Accounts) RefreshQuotas() ([]AccountView, error) {
-	return s.refreshQuotas(context.Background(), true)
+	return s.refreshQuotas(context.Background(), true, true)
+}
+
+// RefreshQuotasIfDue refreshes quotas only for accounts whose cache TTL has expired.
+func (s *Accounts) RefreshQuotasIfDue() ([]AccountView, error) {
+	return s.refreshQuotas(context.Background(), true, false)
 }
 
 // RefreshCurrentQuota performs a force refresh only for the currently active account.
 func (s *Accounts) RefreshCurrentQuota() ([]AccountView, error) {
-	return s.refreshQuotas(context.Background(), false)
+	return s.refreshQuotas(context.Background(), false, true)
 }
 
 // RefreshAccountQuota performs a force refresh only for the specified account email.
@@ -105,7 +110,6 @@ func (s *Accounts) RefreshAccountQuota(email string) ([]AccountView, error) {
 	if s.roster == nil || s.refresher == nil {
 		return nil, fmt.Errorf("account service is not initialized")
 	}
-	s.cancelBackgroundRefresh()
 	s.refreshMu.Lock()
 	items, err := s.roster.List(context.Background())
 	if err != nil {
@@ -126,10 +130,7 @@ func (s *Accounts) RefreshAccountQuota(email string) ([]AccountView, error) {
 
 func (s *Accounts) SwitchAccount(email string) error {
 	s.cancelBackgroundRefresh()
-	s.refreshMu.Lock()
-	err := s.roster.Switch(context.Background(), email)
-	s.refreshMu.Unlock()
-	if err != nil {
+	if err := s.roster.Switch(context.Background(), email); err != nil {
 		return err
 	}
 	s.lastCurrentMu.Lock()
@@ -311,7 +312,7 @@ func (s *Accounts) accountViews(ctx context.Context, refresh bool) ([]AccountVie
 		}
 		return s.buildAccountViews(items, usage.LoadCache(s.cachePath)), nil
 	}
-	return s.refreshQuotas(ctx, true)
+	return s.refreshQuotas(ctx, true, true)
 }
 
 func (s *Accounts) recordCurrent(items []accounts.Account) {
@@ -337,7 +338,7 @@ func (s *Accounts) applyStableCurrent(items []accounts.Account) {
 	}
 }
 
-func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]AccountView, error) {
+func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers, force bool) ([]AccountView, error) {
 	if s.roster == nil || s.refresher == nil {
 		return nil, fmt.Errorf("account service is not initialized")
 	}
@@ -363,9 +364,9 @@ func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]Acc
 
 	var cache *usage.Cache
 	if len(current) > 0 {
-		cache, err = s.refresher.RefreshSubset(ctx, allEmails, current, true)
+		cache, err = s.refresher.RefreshSubset(ctx, allEmails, current, force)
 	} else if includeOthers {
-		cache, err = s.refresher.RefreshSubset(ctx, allEmails, others, true)
+		cache, err = s.refresher.RefreshSubset(ctx, allEmails, others, force)
 		others = nil
 	} else {
 		cache = usage.LoadCache(s.cachePath)
@@ -376,7 +377,7 @@ func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]Acc
 		return nil, err
 	}
 	if includeOthers && len(others) > 0 {
-		s.startBackgroundRefresh(allEmails, others)
+		s.startBackgroundRefresh(allEmails, others, force)
 	}
 	return s.buildAccountViews(items, cache), nil
 }
@@ -390,7 +391,7 @@ func (s *Accounts) cancelBackgroundRefresh() {
 	s.bgMu.Unlock()
 }
 
-func (s *Accounts) startBackgroundRefresh(allEmails, targets []string) {
+func (s *Accounts) startBackgroundRefresh(allEmails, targets []string, force bool) {
 	bgCtx, cancel := context.WithCancel(context.Background())
 	s.bgMu.Lock()
 	if s.bgCancel != nil {
@@ -402,11 +403,16 @@ func (s *Accounts) startBackgroundRefresh(allEmails, targets []string) {
 
 	go func() {
 		defer cancel()
-		s.refreshMu.Lock()
-		if bgCtx.Err() == nil {
-			_, _ = s.refresher.RefreshSubset(bgCtx, allEmails, targets, true)
+		for _, target := range targets {
+			if bgCtx.Err() != nil {
+				break
+			}
+			s.refreshMu.Lock()
+			if bgCtx.Err() == nil {
+				_, _ = s.refresher.RefreshSubset(bgCtx, allEmails, []string{target}, force)
+			}
+			s.refreshMu.Unlock()
 		}
-		s.refreshMu.Unlock()
 		if bgCtx.Err() == nil && cb != nil {
 			cb()
 		}

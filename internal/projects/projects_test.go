@@ -98,3 +98,41 @@ func TestDismissAndReappearProjectWithoutDuplicates(t *testing.T) {
 		t.Fatalf("expected 1 deduplicated project with conv-2, got %#v", views)
 	}
 }
+
+func TestListProjectsWaitsForNewlineBeforeAdvancingTranscriptOffset(t *testing.T) {
+	dir := t.TempDir()
+	ws := filepath.Join(dir, "repo-partial")
+	historyPath := filepath.Join(dir, "history.jsonl")
+	transcriptDir := filepath.Join(dir, "brain", "conv-partial", ".system_generated", "logs")
+	if err := os.MkdirAll(transcriptDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(historyPath, []byte(`{"workspace":"`+filepath.ToSlash(ws)+`","conversationId":"conv-partial","timestamp":1700000000000}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	transcriptPath := filepath.Join(transcriptDir, "transcript.jsonl")
+	partial := `{"type":"assistant","status":"done","model":"MODEL_CLAUDE_4_6_OPUS","input_tokens":1200,"output_tokens":300`
+	if err := os.WriteFile(transcriptPath, []byte(partial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	views, err := ListProjects(dir)
+	if err != nil {
+		t.Fatalf("ListProjects() initial error = %v", err)
+	}
+	if len(views) != 1 || views[0].StepCount != 0 {
+		t.Fatalf("expected 0 steps for partial EOF line, got %#v", views)
+	}
+
+	if err := os.WriteFile(transcriptPath, []byte(partial+"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	views, err = ListProjects(dir)
+	if err != nil {
+		t.Fatalf("ListProjects() after completion error = %v", err)
+	}
+	if len(views) != 1 || views[0].StepCount != 1 || views[0].TotalInput != 1200 {
+		t.Fatalf("expected 1 step with 1200 input tokens after newline, got %#v", views)
+	}
+}
