@@ -197,8 +197,13 @@ func (s *uiState) view(c *ui.Context) {
 		root = root.Background(p.bg)
 	}
 	root.Children(func() {
-		// Header
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+		// Header (respects native title bar controls and supports dragging)
+		bar := c.TitleBar()
+		headerH := float32(30)
+		if bar.Height > headerH {
+			headerH = bar.Height
+		}
+		ui.Row(c).FillWidth().Height(headerH).Padding(0, bar.Right, 0, bar.Left).AlignItems(ui.Center).Gap(6).DragWindow().Children(func() {
 			ui.Box(c).Width(24).Height(24).Radius(7).Background(p.accent).Center().Children(func() {
 				ui.Text(c, "A").FontSize(12).Bold().TextColor(ui.RGB(255, 255, 255))
 			})

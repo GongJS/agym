@@ -34,7 +34,7 @@ func Run() error {
 	svc := appservice.NewAccounts(roster)
 	state := newUIState(svc)
 
-	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
+	mygo.App.SetActivationPolicy(mygo.ActivationPolicyRegular)
 	mygo.App.OnWindowAllClosed(func() {})
 	switch state.themeMode() {
 	case "light":
@@ -104,63 +104,35 @@ func Run() error {
 			return
 		}
 
-		win = mygo.NewFlyout(mygo.FlyoutOptions{
-			Tray:         tray,
-			Gap:          6,
-			Width:        396,
-			Height:       280,
-			MinWidth:     396,
-			MaxWidth:     396,
-			MinHeight:    240,
-			MaxHeight:    680,
-			FitContent:   false,
-			Focusable:    true,
-			Hidden:       true,
-			Shadow:       true,
-			CornerRadius: 14,
-			Popover:      false,
-			Content:      ui.View(state.view),
+		win = mygo.NewWindow(mygo.WindowOptions{
+			Title:             "Agy Manager",
+			Width:             420,
+			Height:            280,
+			MinWidth:          396,
+			MinHeight:         240,
+			MaxHeight:         760,
+			Hidden:            false,
+			TitleBarStyle:     mygo.TitleBarHiddenInset,
+			DisableMaximize:   true,
+			DisableFullScreen: true,
+			Content:           ui.View(state.view),
 		})
+		win.Center()
 		state.setWindow(win, startPolling, stopPolling)
 
-		positionFlyout := func() {
-			tb := tray.Bounds()
-			if tb.Width <= 0 && tb.Height <= 0 {
-				return
+		showWindow := func() {
+			if win.IsMinimized() {
+				win.Restore()
 			}
-			w, h := win.Size()
-			if w <= 0 {
-				w = 396
-			}
-			if h <= 0 {
-				h = 280
-			}
-			x := tb.X + (tb.Width-w)/2
-			y := tb.Y + tb.Height + 6
-			wa := mygo.Screen.DisplayNearestPoint(mygo.Point{X: tb.X, Y: tb.Y}).WorkArea
-			if wa.Width > 0 {
-				if x+w > wa.X+wa.Width-8 {
-					x = wa.X + wa.Width - w - 8
-				}
-				if x < wa.X+8 {
-					x = wa.X + 8
-				}
-				if y+h > wa.Y+wa.Height-8 {
-					y = tb.Y - h - 6
-				}
-				if y < wa.Y+4 {
-					y = wa.Y + 4
-				}
-			}
-			win.SetPosition(x, y)
+			win.Show()
+			win.Focus()
 		}
 
 		menu := mygo.NewMenu([]*mygo.MenuItem{
 			{
 				Label: "Open Agy Manager",
 				Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
-					positionFlyout()
-					win.Show()
+					showWindow()
 				},
 			},
 			mygo.Separator(),
@@ -172,11 +144,10 @@ func Run() error {
 			},
 		})
 		tray.OnClick(func() {
-			if win.IsVisible() {
+			if win.IsVisible() && !win.IsMinimized() {
 				win.Hide()
 			} else {
-				positionFlyout()
-				win.Show()
+				showWindow()
 			}
 		})
 		tray.OnRightClick(func() {
@@ -237,13 +208,21 @@ func (s *uiState) syncWindowHeight(win *mygo.Window) {
 	if hasContent {
 		targetH = 540
 	}
-	changed := s.lastWindowHeight != targetH
+	prevH := s.lastWindowHeight
+	changed := prevH != targetH
 	if changed {
 		s.lastWindowHeight = targetH
 	}
 	s.mu.Unlock()
 	if changed {
-		win.SetSize(396, targetH)
+		w, _ := win.Size()
+		if w <= 0 {
+			w = 420
+		}
+		win.SetSize(w, targetH)
+		if prevH == 0 {
+			win.Center()
+		}
 	}
 }
 
