@@ -252,9 +252,16 @@ func (s *uiState) loadAccountsAsync(win *mygo.Window, showRefreshed bool) {
 	if s.svc == nil {
 		return
 	}
+	s.mu.Lock()
+	gen := s.switchGen
+	s.mu.Unlock()
 	go func() {
 		items, err := s.svc.ListAccounts()
 		s.mu.Lock()
+		if s.switching || s.switchGen != gen {
+			s.mu.Unlock()
+			return
+		}
 		if err != nil {
 			s.statusMsg = err.Error()
 			s.statusErr = true
@@ -287,10 +294,11 @@ func (s *uiState) refreshQuotasBackgroundAsync(win *mygo.Window) {
 		return
 	}
 	s.mu.Lock()
-	if s.refreshing {
+	if s.refreshing || s.switching {
 		s.mu.Unlock()
 		return
 	}
+	gen := s.switchGen
 	s.refreshing = true
 	s.mu.Unlock()
 
@@ -298,7 +306,7 @@ func (s *uiState) refreshQuotasBackgroundAsync(win *mygo.Window) {
 		items, err := s.svc.RefreshQuotas()
 		s.mu.Lock()
 		s.refreshing = false
-		if err == nil {
+		if err == nil && !s.switching && s.switchGen == gen {
 			s.accounts = items
 		}
 		s.mu.Unlock()

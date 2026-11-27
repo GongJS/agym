@@ -116,6 +116,8 @@ type uiState struct {
 	refreshing        bool
 	refreshingEmails  map[string]bool
 	currentQuotaBusy  bool
+	switching         bool
+	switchGen         uint64
 	projectsLoaded    bool
 	projectsLoading   bool
 	adding            bool
@@ -736,6 +738,9 @@ func renderLegendRow(c *ui.Context, p palette, swatch ui.Color, label, val strin
 
 func (s *uiState) switchAccountAsync(win *mygo.Window, email string) {
 	s.mu.Lock()
+	s.switching = true
+	s.switchGen++
+	myGen := s.switchGen
 	for i := range s.accounts {
 		s.accounts[i].Current = s.accounts[i].Email == email
 	}
@@ -748,6 +753,9 @@ func (s *uiState) switchAccountAsync(win *mygo.Window, email string) {
 	go func() {
 		err := s.svc.SwitchAccount(email)
 		s.mu.Lock()
+		if s.switchGen == myGen {
+			s.switching = false
+		}
 		if err != nil {
 			s.statusMsg = err.Error()
 			s.statusErr = true

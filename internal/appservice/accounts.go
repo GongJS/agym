@@ -53,10 +53,12 @@ type Accounts struct {
 	oauthCmds chan accounts.OAuthCommand
 	oauthStop context.CancelFunc
 
-	refreshMu       sync.Mutex
-	bgMu            sync.Mutex
-	bgCancel        context.CancelFunc
-	onQuotasUpdated func()
+	refreshMu        sync.Mutex
+	lastCurrentMu    sync.Mutex
+	lastCurrentEmail string
+	bgMu             sync.Mutex
+	bgCancel         context.CancelFunc
+	onQuotasUpdated  func()
 }
 
 // SetOnQuotasUpdated registers a callback invoked when background quota refreshes complete.
@@ -126,7 +128,17 @@ func (s *Accounts) RefreshAccountQuota(email string) ([]AccountView, error) {
 }
 
 func (s *Accounts) SwitchAccount(email string) error {
-	return s.roster.Switch(context.Background(), email)
+	s.cancelBackgroundRefresh()
+	s.refreshMu.Lock()
+	err := s.roster.Switch(context.Background(), email)
+	s.refreshMu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.lastCurrentMu.Lock()
+	s.lastCurrentEmail = email
+	s.lastCurrentMu.Unlock()
+	return nil
 }
 
 // AddExistingAccount adds an account that is already present in the agy
@@ -331,13 +343,46 @@ func (s *Accounts) accountViews(ctx context.Context, refresh bool) ([]AccountVie
 		if s.roster == nil || s.refresher == nil {
 			return nil, fmt.Errorf("account service is not initialized")
 		}
+		// Avoid reading a temporarily swapped Keychain slot while a quota probe is active.
+		locked := s.refreshMu.TryLock()
 		items, err := s.roster.List(ctx)
+		if locked {
+			s.refreshMu.Unlock()
+		}
 		if err != nil {
 			return nil, err
+		}
+		if locked {
+			s.recordCurrent(items)
+		} else {
+			s.applyStableCurrent(items)
 		}
 		return s.buildAccountViews(items, usage.LoadCache(s.cachePath)), nil
 	}
 	return s.refreshQuotas(ctx, true)
+}
+
+func (s *Accounts) recordCurrent(items []accounts.Account) {
+	for _, item := range items {
+		if item.Current {
+			s.lastCurrentMu.Lock()
+			s.lastCurrentEmail = item.Email
+			s.lastCurrentMu.Unlock()
+			return
+		}
+	}
+}
+
+func (s *Accounts) applyStableCurrent(items []accounts.Account) {
+	s.lastCurrentMu.Lock()
+	stable := s.lastCurrentEmail
+	s.lastCurrentMu.Unlock()
+	if stable == "" {
+		return
+	}
+	for i := range items {
+		items[i].Current = items[i].Email == stable
+	}
 }
 
 func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]AccountView, error) {
@@ -352,6 +397,7 @@ func (s *Accounts) refreshQuotas(ctx context.Context, includeOthers bool) ([]Acc
 		s.refreshMu.Unlock()
 		return nil, err
 	}
+	s.recordCurrent(items)
 	allEmails := make([]string, 0, len(items))
 	var current, others []string
 	for _, item := range items {
