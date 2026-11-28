@@ -176,6 +176,8 @@ func (s *uiState) view(c *ui.Context) {
 					btn := ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
 					if active {
 						btn = btn.Background(p.accentSoft)
+					} else {
+						btn = hoverBg(btn, p.ghostHover)
 					}
 					if btn.Children(func() {
 						col := p.muted
@@ -223,7 +225,11 @@ func (s *uiState) view(c *ui.Context) {
 					modelLabel = s.tr("sidebar.noModel")
 				}
 
-				accountCard := ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(radiusSub).Background(p.card).Border(1, cardBorder).Cursor(cardCursor).Disabled(!cardInteractive).Children(func() {
+				accountCard := ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(radiusSub).Background(p.card).Border(1, cardBorder).Cursor(cardCursor).Disabled(!cardInteractive)
+				if cardInteractive && !menuOpen {
+					accountCard = hoverCard(accountCard, p.cardHover, p.lineHover)
+				}
+				accountCard.Children(func() {
 					ui.Column(c).FillWidth().Gap(5).Children(func() {
 						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 							ui.Box(c).Width(20).Height(20).Radius(radiusSub).Background(p.accentSoft).Center().Children(func() {
@@ -268,7 +274,11 @@ func (s *uiState) view(c *ui.Context) {
 									if a.Current {
 										rowBg = p.accentSoft
 									}
-									itemBtn := ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(radiusControl).Background(rowBg).Cursor(rowCursor).Disabled(!canSwitch && !a.Current).Children(func() {
+									itemBtn := ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(radiusControl).Background(rowBg).Cursor(rowCursor).Disabled(!canSwitch && !a.Current)
+									if canSwitch {
+										itemBtn = hoverBg(itemBtn, p.ghostHover)
+									}
+									itemBtn.Children(func() {
 										ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
 											dot := p.muted
 											if a.Current {
@@ -304,7 +314,7 @@ func (s *uiState) view(c *ui.Context) {
 								}
 								if tabIdx != 0 {
 									ui.Divider(c)
-									if ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(radiusControl).Cursor(ui.CursorPointer).Children(func() {
+									if hoverBg(ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(radiusControl).Cursor(ui.CursorPointer), p.ghostHover).Children(func() {
 										ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 											ui.Text(c, s.tr("sidebar.manageAccounts")).FontSize(fontCaption).TextColor(p.muted)
 											ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
@@ -422,7 +432,11 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 	ui.Row(c).FillWidth().Padding(0, rightPad, 0, 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
 		ui.Text(c, summary).FontSize(fontCaption).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 		if len(items) > 0 {
-			allBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing).Children(func() {
+			allBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing)
+			if !refreshing {
+				allBtn = hoverBg(allBtn, p.softHover)
+			}
+			allBtn.Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 					ui.Icon(c, refreshSVG).Size(10.5, 10.5).TextColor(p.fg)
 					label := s.tr("summary.refreshAll")
@@ -441,7 +455,7 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 	if statusMsg != "" && statusErr {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(7, 10).Radius(radiusSub).Background(p.dangerSoft).Border(1, p.danger).Children(func() {
 			ui.Text(c, statusMsg).FontSize(fontCaption).TextColor(p.danger).Grow(1).Shrink(1)
-			if ui.ButtonBase(c).Padding(2).Radius(radiusSmall).Cursor(ui.CursorPointer).Children(func() {
+			if hoverBg(ui.ButtonBase(c).Padding(2).Radius(radiusSmall).Cursor(ui.CursorPointer), p.dangerSoftHover).Children(func() {
 				ui.Icon(c, closeSVG).Size(11, 11).TextColor(p.danger)
 			}).Clicked() {
 				s.mu.Lock()
@@ -467,7 +481,7 @@ func (s *uiState) renderAccountsTab(c *ui.Context, p palette, items []appservice
 		if len(items) == 0 || showAdd || oauthActive {
 			s.renderOnboardingCard(c, p, len(items) > 0)
 		} else {
-			if ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(radiusSub).Background(p.card).Border(1, p.line).Center().Cursor(ui.CursorPointer).Children(func() {
+			if hoverCard(ui.ButtonBase(c).FillWidth().Padding(8, 10).Radius(radiusSub).Background(p.card).Border(1, p.line).Center().Cursor(ui.CursorPointer), p.cardHover, p.lineHover).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
 					ui.Icon(c, plusSVG).Size(12, 12).TextColor(p.accent)
 					ui.Text(c, s.tr("account.addToggle")).FontSize(fontCaption).Bold().TextColor(p.fg)
@@ -562,7 +576,7 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 			if expanded {
 				chevIcon = chevronDownSVG
 			}
-			if ui.ButtonBase(c).Padding(4).Radius(radiusSmall).Cursor(ui.CursorPointer).Children(func() {
+			if hoverBg(ui.ButtonBase(c).Padding(4).Radius(radiusSmall).Cursor(ui.CursorPointer), p.ghostHover).Children(func() {
 				ui.Icon(c, chevIcon).Size(12, 12).TextColor(p.muted)
 			}).Clicked() {
 				toggleClicked = true
@@ -664,7 +678,11 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 						}
 						ui.Text(c, checkedText).FontSize(fontMicro).TextColor(p.muted)
 					})
-					footerRefreshBtn := ui.ButtonBase(c).Padding(3, 8).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(cardRefreshing).Children(func() {
+					footerRefreshBtn := ui.ButtonBase(c).Padding(3, 8).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(cardRefreshing)
+					if !cardRefreshing {
+						footerRefreshBtn = hoverBg(footerRefreshBtn, p.softHover)
+					}
+					footerRefreshBtn.Children(func() {
 						ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 							ui.Icon(c, refreshSVG).Size(10.5, 10.5).TextColor(p.fg)
 							label := s.tr("account.refresh")
@@ -694,14 +712,14 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 					if !acc.Current {
 						if confirmingRemove {
 							ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
-								if ui.ButtonBase(c).Padding(3, 7).Radius(radiusSmall).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
+								if hoverBg(ui.ButtonBase(c).Padding(3, 7).Radius(radiusSmall).Background(p.soft).Cursor(ui.CursorPointer), p.softHover).Children(func() {
 									ui.Text(c, s.tr("account.cancelRemove")).FontSize(fontMicro).TextColor(p.muted)
 								}).Clicked() {
 									s.mu.Lock()
 									s.confirmRemoveEmail = ""
 									s.mu.Unlock()
 								}
-								if ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.danger).Cursor(ui.CursorPointer).Children(func() {
+								if hoverBg(ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.danger).Cursor(ui.CursorPointer), p.dangerHover).Children(func() {
 									ui.Text(c, s.tr("account.confirmRemove")).FontSize(fontMicro).Bold().TextColor(p.onAccent)
 								}).Clicked() {
 									s.mu.Lock()
@@ -713,13 +731,13 @@ func (s *uiState) renderAccountCard(c *ui.Context, p palette, acc appservice.Acc
 						} else {
 							ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
 								if acc.HasSavedLogin {
-									if ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.accentSoft).Cursor(ui.CursorPointer).Children(func() {
+									if hoverBg(ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.accentSoft).Cursor(ui.CursorPointer), p.accentSoftHover).Children(func() {
 										ui.Text(c, s.tr("account.switch")).FontSize(fontMicro).Bold().TextColor(p.accent)
 									}).Clicked() {
 										s.switchAccountAsync(win, acc.Email)
 									}
 								}
-								if ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+								if hoverBg(ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.dangerSoft).Cursor(ui.CursorPointer), p.dangerSoftHover).Children(func() {
 									ui.Text(c, s.tr("account.remove")).FontSize(fontMicro).Bold().TextColor(p.danger)
 								}).Clicked() {
 									s.mu.Lock()
@@ -750,7 +768,7 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 			ui.Text(c, s.tr("account.addToggle")).FontSize(fontBody).Bold().TextColor(p.fg)
 			if collapsible && !oauthBusy {
-				if ui.ButtonBase(c).Padding(4).Radius(radiusSmall).Cursor(ui.CursorPointer).Children(func() {
+				if hoverBg(ui.ButtonBase(c).Padding(4).Radius(radiusSmall).Cursor(ui.CursorPointer), p.ghostHover).Children(func() {
 					ui.Icon(c, chevronDownSVG).Size(12, 12).TextColor(p.muted)
 				}).Clicked() {
 					s.mu.Lock()
@@ -769,7 +787,11 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 			oauthFg = p.muted
 			oauthLabel = s.tr("account.oauthBusy")
 		}
-		if ui.ButtonBase(c).FillWidth().Padding(7, 10).Radius(radiusControl).Background(oauthBg).Cursor(ui.CursorPointer).Disabled(oauthBusy).Center().Children(func() {
+		oauthBtn := ui.ButtonBase(c).FillWidth().Padding(7, 10).Radius(radiusControl).Background(oauthBg).Cursor(ui.CursorPointer).Disabled(oauthBusy).Center()
+		if !oauthBusy {
+			oauthBtn = hoverBg(oauthBtn, p.accentHover)
+		}
+		if oauthBtn.Children(func() {
 			ui.Text(c, oauthLabel).FontSize(fontCaption).Bold().TextColor(oauthFg)
 		}).Clicked() {
 			s.startOAuthAsync(win)
@@ -786,7 +808,7 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 			if oauth.State == "error" {
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Padding(7, 9).Radius(radiusControl).Background(p.dangerSoft).Children(func() {
 					ui.Text(c, msg).FontSize(fontCaption).TextColor(p.danger).Grow(1).Shrink(1)
-					if ui.ButtonBase(c).Padding(2).Radius(radiusSmall).Cursor(ui.CursorPointer).Children(func() {
+					if hoverBg(ui.ButtonBase(c).Padding(2).Radius(radiusSmall).Cursor(ui.CursorPointer), p.dangerSoftHover).Children(func() {
 						ui.Icon(c, closeSVG).Size(10.5, 10.5).TextColor(p.danger)
 					}).Clicked() {
 						s.mu.Lock()
@@ -800,7 +822,7 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 					ui.Text(c, msg).FontSize(fontCaption).TextColor(p.fg)
 
 					if oauth.State == accounts.OAuthStateAuthorize && oauth.URL != "" {
-						if ui.ButtonBase(c).Padding(4, 8).Radius(radiusControl).Background(p.accentSoft).Cursor(ui.CursorPointer).Children(func() {
+						if hoverBg(ui.ButtonBase(c).Padding(4, 8).Radius(radiusControl).Background(p.accentSoft).Cursor(ui.CursorPointer), p.accentSoftHover).Children(func() {
 							ui.Text(c, s.tr("oauth.openLink")).FontSize(fontCaption).Bold().TextColor(p.accent)
 						}).Clicked() {
 							go func(u string) { _ = mygo.Shell.OpenExternal(u) }(oauth.URL)
@@ -818,7 +840,11 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 							if trimmedCode != "" {
 								subBg, subFg = p.accent, p.onAccent
 							}
-							subBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(subBg).Cursor(ui.CursorPointer).Disabled(trimmedCode == "").Children(func() {
+							subBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(subBg).Cursor(ui.CursorPointer).Disabled(trimmedCode == "")
+							if trimmedCode != "" {
+								subBtn = hoverBg(subBtn, p.accentHover)
+							}
+							subBtn.Children(func() {
 								ui.Text(c, s.tr("oauth.submit")).FontSize(fontCaption).Bold().TextColor(subFg)
 							})
 							if (subBtn.Clicked() || codeInp.Submitted()) && trimmedCode != "" {
@@ -828,7 +854,7 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 					}
 
 					if oauthBusy {
-						if ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+						if hoverBg(ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.dangerSoft).Cursor(ui.CursorPointer), p.dangerSoftHover).Children(func() {
 							ui.Text(c, s.tr("oauth.cancel")).FontSize(fontMicro).Bold().TextColor(p.danger)
 						}).Clicked() {
 							s.cancelOAuthAsync(win, oauth.AttemptID)
@@ -855,7 +881,11 @@ func (s *uiState) renderOnboardingCard(c *ui.Context, p palette, collapsible boo
 			if canImport {
 				importBg, importFg = p.accentSoft, p.accent
 			}
-			addBtn := ui.ButtonBase(c).Padding(5, 10).Radius(radiusControl).Background(importBg).Cursor(ui.CursorPointer).Disabled(!canImport).Children(func() {
+			addBtn := ui.ButtonBase(c).Padding(5, 10).Radius(radiusControl).Background(importBg).Cursor(ui.CursorPointer).Disabled(!canImport)
+			if canImport {
+				addBtn = hoverBg(addBtn, p.accentSoftHover)
+			}
+			addBtn.Children(func() {
 				ui.Text(c, s.tr("account.add")).FontSize(fontCaption).Bold().TextColor(importFg)
 			})
 			if (addBtn.Clicked() || inp.Submitted()) && canImport {
@@ -896,7 +926,11 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 	summary := s.tr("projects.stats", len(items), runningCount)
 	ui.Row(c).FillWidth().Padding(0, 16, 0, 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
 		ui.Text(c, summary).FontSize(fontCaption).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
-		refBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing).Children(func() {
+		refBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing)
+		if !refreshing {
+			refBtn = hoverBg(refBtn, p.softHover)
+		}
+		refBtn.Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 				ui.Icon(c, refreshSVG).Size(10.5, 10.5).TextColor(p.fg)
 				label := s.tr("projects.refresh")
@@ -1021,7 +1055,7 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 			if expanded {
 				chevIcon = chevronDownSVG
 			}
-			if ui.ButtonBase(c).Padding(4).Radius(radiusSmall).Cursor(ui.CursorPointer).Children(func() {
+			if hoverBg(ui.ButtonBase(c).Padding(4).Radius(radiusSmall).Cursor(ui.CursorPointer), p.ghostHover).Children(func() {
 				ui.Icon(c, chevIcon).Size(12, 12).TextColor(p.muted)
 			}).Clicked() {
 				toggleClicked = true
@@ -1097,14 +1131,14 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 					ui.Text(c, s.tr("projects.footer", proj.StepCount, formatTokens(totalTokens))).FontSize(fontMicro).TextColor(p.muted)
 					if confirmingRemove {
 						ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
-							if ui.ButtonBase(c).Padding(3, 7).Radius(radiusSmall).Background(p.soft).Cursor(ui.CursorPointer).Children(func() {
+							if hoverBg(ui.ButtonBase(c).Padding(3, 7).Radius(radiusSmall).Background(p.soft).Cursor(ui.CursorPointer), p.softHover).Children(func() {
 								ui.Text(c, s.tr("account.cancelRemove")).FontSize(fontMicro).TextColor(p.muted)
 							}).Clicked() {
 								s.mu.Lock()
 								s.confirmRemoveProject = ""
 								s.mu.Unlock()
 							}
-							if ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.danger).Cursor(ui.CursorPointer).Children(func() {
+							if hoverBg(ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.danger).Cursor(ui.CursorPointer), p.dangerHover).Children(func() {
 								ui.Text(c, s.tr("account.confirmRemove")).FontSize(fontMicro).Bold().TextColor(p.onAccent)
 							}).Clicked() {
 								s.mu.Lock()
@@ -1114,7 +1148,7 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 							}
 						})
 					} else {
-						if ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.dangerSoft).Cursor(ui.CursorPointer).Children(func() {
+						if hoverBg(ui.ButtonBase(c).Padding(3, 8).Radius(radiusSmall).Background(p.dangerSoft).Cursor(ui.CursorPointer), p.dangerSoftHover).Children(func() {
 							ui.Text(c, s.tr("account.remove")).FontSize(fontMicro).Bold().TextColor(p.danger)
 						}).Clicked() {
 							s.mu.Lock()
@@ -1450,7 +1484,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 	if statusMsg != "" && statusErr {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(7, 10).Radius(radiusSub).Background(p.dangerSoft).Border(1, p.danger).Children(func() {
 			ui.Text(c, statusMsg).FontSize(fontCaption).TextColor(p.danger).Grow(1).Shrink(1)
-			if ui.ButtonBase(c).Padding(2).Radius(radiusSmall).Cursor(ui.CursorPointer).Children(func() {
+			if hoverBg(ui.ButtonBase(c).Padding(2).Radius(radiusSmall).Cursor(ui.CursorPointer), p.dangerSoftHover).Children(func() {
 				ui.Icon(c, closeSVG).Size(11, 11).TextColor(p.danger)
 			}).Clicked() {
 				s.mu.Lock()
@@ -1481,6 +1515,8 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 						btn := ui.ButtonBase(c).Grow(1).Padding(6, 0).Radius(radiusControl).Center().Cursor(ui.CursorPointer)
 						if active {
 							btn = btn.Background(p.pillBg)
+						} else {
+							btn = hoverBg(btn, p.ghostHover)
 						}
 						if btn.Children(func() {
 							col := p.muted
@@ -1515,6 +1551,8 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 						btn := ui.ButtonBase(c).Grow(1).Padding(6, 0).Radius(radiusControl).Center().Cursor(ui.CursorPointer)
 						if active {
 							btn = btn.Background(p.pillBg)
+						} else {
+							btn = hoverBg(btn, p.ghostHover)
 						}
 						if btn.Children(func() {
 							col := p.muted
@@ -1587,7 +1625,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 						pillFg = p.muted
 					}
 
-					recBtn := ui.ButtonBase(c).Width(116).Height(26).Radius(radiusControl).Background(pillBg).Border(1, pillBorder).Center().Cursor(ui.CursorPointer).Children(func() {
+					recBtn := hoverCard(ui.ButtonBase(c).Width(116).Height(26).Radius(radiusControl).Background(pillBg).Border(1, pillBorder).Center().Cursor(ui.CursorPointer), p.softHover, p.lineHover).Children(func() {
 						ui.Text(c, pillLabel).FontSize(fontCaption).Bold().TextColor(pillFg).Ellipsis("…").SingleLine()
 					})
 					if recBtn.Clicked() {
@@ -1597,7 +1635,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 					}
 
 					if scEnabled && scAccel != "" {
-						clearBtn := ui.ButtonBase(c).Width(18).Height(18).Radius(radiusSub).Background(p.muted).Center().Cursor(ui.CursorPointer).Children(func() {
+						clearBtn := hoverBg(ui.ButtonBase(c).Width(18).Height(18).Radius(radiusSub).Background(p.muted).Center().Cursor(ui.CursorPointer), p.dangerHover).Children(func() {
 							ui.Icon(c, closeSVG).Size(10, 10).TextColor(p.card)
 						})
 						if clearBtn.Clicked() {
@@ -1629,7 +1667,11 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 					if updChecking {
 						checkLabel = s.tr("settings.checkingUpdate")
 					}
-					if ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(updChecking || updApplying).Children(func() {
+					checkBtn := ui.ButtonBase(c).Padding(4, 9).Radius(radiusControl).Background(p.soft).Cursor(ui.CursorPointer).Disabled(updChecking || updApplying)
+					if !(updChecking || updApplying) {
+						checkBtn = hoverBg(checkBtn, p.softHover)
+					}
+					if checkBtn.Children(func() {
 						ui.Text(c, checkLabel).FontSize(fontMicro).Bold().TextColor(p.fg)
 					}).Clicked() {
 						s.checkForUpdatesAsync(win, true)
@@ -1644,13 +1686,17 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 							if updApplying {
 								updLabel = s.tr("settings.updating")
 							}
-							if ui.ButtonBase(c).Padding(5, 10).Radius(radiusControl).Background(p.accent).Cursor(ui.CursorPointer).Disabled(updApplying).Children(func() {
+							updBtn := ui.ButtonBase(c).Padding(5, 10).Radius(radiusControl).Background(p.accent).Cursor(ui.CursorPointer).Disabled(updApplying)
+							if !updApplying {
+								updBtn = hoverBg(updBtn, p.accentHover)
+							}
+							if updBtn.Children(func() {
 								ui.Text(c, updLabel).FontSize(fontCaption).Bold().TextColor(p.onAccent)
 							}).Clicked() {
 								s.selfUpdateAsync(win)
 							}
 							if latestURL != "" {
-								if ui.ButtonBase(c).Padding(5, 10).Radius(radiusControl).Background(p.card).Cursor(ui.CursorPointer).Children(func() {
+								if hoverCard(ui.ButtonBase(c).Padding(5, 10).Radius(radiusControl).Background(p.card).Cursor(ui.CursorPointer), p.cardHover, p.lineHover).Children(func() {
 									ui.Text(c, s.tr("settings.releaseNotes")).FontSize(fontCaption).TextColor(p.fg)
 								}).Clicked() {
 									go func(u string) { _ = mygo.Shell.OpenExternal(u) }(latestURL)

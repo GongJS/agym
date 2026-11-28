@@ -26,30 +26,38 @@ const (
 )
 
 type palette struct {
-	dark       bool
-	bg         ui.Color
-	card       ui.Color
-	cardSub    ui.Color
-	soft       ui.Color
-	fg         ui.Color
-	muted      ui.Color
-	line       ui.Color
-	accent     ui.Color
-	accentSoft ui.Color
-	onAccent   ui.Color
-	ok         ui.Color
-	okSoft     ui.Color
-	danger     ui.Color
-	dangerSoft ui.Color
-	track      ui.Color
-	fresh      ui.Color
-	cache      ui.Color
-	output     ui.Color
-	pillBg     ui.Color
-	pillText   ui.Color
-	warnBg     ui.Color
-	warnText   ui.Color
-	highBg     ui.Color
+	dark            bool
+	bg              ui.Color
+	card            ui.Color
+	cardHover       ui.Color
+	cardSub         ui.Color
+	soft            ui.Color
+	softHover       ui.Color
+	ghostHover      ui.Color
+	fg              ui.Color
+	muted           ui.Color
+	line            ui.Color
+	lineHover       ui.Color
+	accent          ui.Color
+	accentHover     ui.Color
+	accentSoft      ui.Color
+	accentSoftHover ui.Color
+	onAccent        ui.Color
+	ok              ui.Color
+	okSoft          ui.Color
+	danger          ui.Color
+	dangerHover     ui.Color
+	dangerSoft      ui.Color
+	dangerSoftHover ui.Color
+	track           ui.Color
+	fresh           ui.Color
+	cache           ui.Color
+	output          ui.Color
+	pillBg          ui.Color
+	pillText        ui.Color
+	warnBg          ui.Color
+	warnText        ui.Color
+	highBg          ui.Color
 }
 
 func currentPalette(c *ui.Context) palette {
@@ -57,57 +65,88 @@ func currentPalette(c *ui.Context) palette {
 	if dark {
 		// AuthKit — "Frosted glass cathedral at midnight" (DESIGN.md / tokens.json)
 		return palette{
-			dark:       true,
-			bg:         ui.RGB(5, 6, 15),               // #05060f Midnight Canvas
-			card:       ui.RGBA(186, 214, 247, 0.04),   // Frosted Glass
-			cardSub:    ui.RGBA(12, 15, 28, 0.94),      // Deep Glass sidebar / sub-surface
-			soft:       ui.RGBA(199, 211, 234, 0.10),   // Luminous Fill (#c7d3ea1f)
-			fg:         ui.RGB(209, 228, 250),          // #d1e4fa Frost Glow
-			muted:      ui.RGB(157, 167, 186),          // #9da7ba Fog Veil
-			line:       ui.RGBA(186, 215, 247, 0.12),   // #bad7f71f Glass Edge
-			accent:     ui.RGB(102, 58, 243),           // #663af3 Void Violet (CTA & active)
-			accentSoft: ui.RGBA(102, 58, 243, 0.22),    // Void Violet tint
-			onAccent:   ui.RGB(255, 255, 255),          // #ffffff Pure White
-			ok:         ui.RGB(38, 150, 132),           // #269684 Deep Teal
-			okSoft:     ui.RGBA(38, 150, 132, 0.20),
-			danger:     ui.RGB(228, 109, 76),           // #e46d4c Ember Glow
-			dangerSoft: ui.RGBA(228, 109, 76, 0.16),
-			track:      ui.RGBA(186, 215, 247, 0.12),   // Glass Edge track
-			fresh:      ui.RGB(182, 217, 252),          // #b6d9fc Blueprint Blue
-			cache:      ui.RGB(2, 125, 234),            // #027dea Signal Blue
-			output:     ui.RGB(38, 150, 132),           // #269684 Deep Teal
-			pillBg:     ui.RGBA(199, 211, 234, 0.14),   // Luminous active pill
-			pillText:   ui.RGB(216, 236, 248),          // #d8ecf8 Ice Highlight
-			warnBg:     ui.RGBA(251, 191, 36, 0.16),
-			warnText:   ui.RGB(251, 191, 36),
-			highBg:     ui.RGBA(228, 109, 76, 0.20),
+			dark:            true,
+			bg:              ui.RGB(5, 6, 15),             // #05060f Midnight Canvas
+			card:            ui.RGBA(186, 214, 247, 0.04), // Frosted Glass
+			cardHover:       ui.RGBA(186, 214, 247, 0.08), // Frosted Glass hover
+			cardSub:         ui.RGBA(12, 15, 28, 0.94),    // Deep Glass sidebar / sub-surface
+			soft:            ui.RGBA(186, 214, 247, 0.06), // Ghost fill (DESIGN.md Pill Button)
+			softHover:       ui.RGBA(186, 214, 247, 0.12), // Hover lightens frost wash to 0.12
+			ghostHover:      ui.RGBA(186, 214, 247, 0.06), // Transparent control hover
+			fg:              ui.RGB(209, 228, 250),        // #d1e4fa Frost Glow
+			muted:           ui.RGB(157, 167, 186),        // #9da7ba Fog Veil
+			line:            ui.RGBA(186, 215, 247, 0.12), // #bad7f71f Glass Edge
+			lineHover:       ui.RGBA(186, 215, 247, 0.24), // Focus / hover border (DESIGN.md)
+			accent:          ui.RGB(102, 58, 243),         // #663af3 Void Violet (CTA & active)
+			accentHover:     ui.RGB(118, 78, 245),         // Void Violet hover
+			accentSoft:      ui.RGBA(102, 58, 243, 0.22),  // Void Violet tint
+			accentSoftHover: ui.RGBA(102, 58, 243, 0.34),
+			onAccent:        ui.RGB(255, 255, 255),        // #ffffff Pure White
+			ok:              ui.RGB(38, 150, 132),         // #269684 Deep Teal
+			okSoft:          ui.RGBA(38, 150, 132, 0.20),
+			danger:          ui.RGB(228, 109, 76),         // #e46d4c Ember Glow
+			dangerHover:     ui.RGB(238, 126, 95),
+			dangerSoft:      ui.RGBA(228, 109, 76, 0.16),
+			dangerSoftHover: ui.RGBA(228, 109, 76, 0.26),
+			track:           ui.RGBA(186, 215, 247, 0.12), // Glass Edge track
+			fresh:           ui.RGB(182, 217, 252),        // #b6d9fc Blueprint Blue
+			cache:           ui.RGB(2, 125, 234),          // #027dea Signal Blue
+			output:          ui.RGB(38, 150, 132),         // #269684 Deep Teal
+			pillBg:          ui.RGBA(199, 211, 234, 0.14), // Luminous active pill
+			pillText:        ui.RGB(216, 236, 248),        // #d8ecf8 Ice Highlight
+			warnBg:          ui.RGBA(251, 191, 36, 0.16),
+			warnText:        ui.RGB(251, 191, 36),
+			highBg:          ui.RGBA(228, 109, 76, 0.20),
 		}
 	}
+	// Calendly — "Navy ink on cool marble" (DESIGN-1.md / tokens-1.json)
 	return palette{
-		bg:         ui.RGB(244, 246, 252),
-		card:       ui.RGBA(255, 255, 255, 0.96),
-		cardSub:    ui.RGB(238, 242, 250),
-		soft:       ui.RGBA(15, 23, 42, 0.06),
-		fg:         ui.RGB(15, 23, 42),
-		muted:      ui.RGB(94, 106, 128),
-		line:       ui.RGBA(15, 23, 42, 0.10),
-		accent:     ui.RGB(102, 58, 243),
-		accentSoft: ui.RGBA(102, 58, 243, 0.12),
-		onAccent:   ui.RGB(255, 255, 255),
-		ok:         ui.RGB(38, 150, 132),
-		okSoft:     ui.RGBA(38, 150, 132, 0.16),
-		danger:     ui.RGB(220, 38, 38),
-		dangerSoft: ui.RGBA(220, 38, 38, 0.10),
-		track:      ui.RGBA(15, 23, 42, 0.10),
-		fresh:      ui.RGB(2, 125, 234),
-		cache:      ui.RGB(102, 58, 243),
-		output:     ui.RGB(38, 150, 132),
-		pillBg:     ui.RGB(255, 255, 255),
-		pillText:   ui.RGB(15, 23, 42),
-		warnBg:     ui.RGBA(245, 158, 11, 0.16),
-		warnText:   ui.RGB(180, 83, 9),
-		highBg:     ui.RGBA(220, 38, 38, 0.14),
+		bg:              ui.RGB(248, 249, 251),      // #f8f9fb Cloud
+		card:            ui.RGB(255, 255, 255),      // #ffffff Paper
+		cardHover:       ui.RGB(245, 248, 253),      // Subtle cool lift
+		cardSub:         ui.RGB(240, 243, 248),      // #f0f3f8 Pebble sidebar & sub-surface
+		soft:            ui.RGB(240, 243, 248),      // #f0f3f8 Pebble
+		softHover:       ui.RGB(226, 233, 243),      // Deeper Pebble on hover
+		ghostHover:      ui.RGBA(11, 53, 88, 0.05),  // Ink Navy wash
+		fg:              ui.RGB(11, 53, 88),         // #0b3558 Ink Navy
+		muted:           ui.RGB(71, 103, 136),       // #476788 Slate Gray
+		line:            ui.RGB(212, 224, 237),      // #d4e0ed Hairline
+		lineHover:       ui.RGB(166, 187, 209),      // #a6bbd1 Mist Gray
+		accent:          ui.RGB(0, 107, 255),        // #006bff Signal Blue
+		accentHover:     ui.RGB(0, 90, 224),
+		accentSoft:      ui.RGB(230, 240, 255),      // #e6f0ff Pebble-tinted pill
+		accentSoftHover: ui.RGB(212, 229, 255),
+		onAccent:        ui.RGB(255, 255, 255),      // #ffffff Paper
+		ok:              ui.RGB(16, 185, 129),
+		okSoft:          ui.RGBA(16, 185, 129, 0.14),
+		danger:          ui.RGB(220, 38, 38),
+		dangerHover:     ui.RGB(190, 28, 28),
+		dangerSoft:      ui.RGBA(220, 38, 38, 0.10),
+		dangerSoftHover: ui.RGBA(220, 38, 38, 0.17),
+		track:           ui.RGB(212, 224, 237),      // #d4e0ed Hairline
+		fresh:           ui.RGB(0, 107, 255),        // #006bff Signal Blue
+		cache:           ui.RGB(0, 153, 255),        // #0099ff Sky Cyan
+		output:          ui.RGB(16, 185, 129),
+		pillBg:          ui.RGB(255, 255, 255),      // #ffffff Paper
+		pillText:        ui.RGB(11, 53, 88),         // #0b3558 Ink Navy
+		warnBg:          ui.RGBA(245, 158, 11, 0.14),
+		warnText:        ui.RGB(180, 83, 9),
+		highBg:          ui.RGBA(220, 38, 38, 0.14),
 	}
+}
+
+func hoverBg(el ui.Element, bg ui.Color) ui.Element {
+	if el.Hovered() {
+		return el.Background(bg)
+	}
+	return el
+}
+
+func hoverCard(el ui.Element, bg, border ui.Color) ui.Element {
+	if el.Hovered() {
+		return el.Background(bg).Border(1, border)
+	}
+	return el
 }
 
 func (p palette) quotaColor(pct int) ui.Color {
