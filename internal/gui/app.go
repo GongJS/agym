@@ -119,10 +119,10 @@ func Run() error {
 
 		win = mygo.NewWindow(mygo.WindowOptions{
 			Title:             "Agy Manager",
-			Width:             700,
-			Height:            520,
-			MinWidth:          600,
-			MinHeight:         440,
+			Width:             630,
+			Height:            500,
+			MinWidth:          550,
+			MinHeight:         400,
 			MaxHeight:         820,
 			Hidden:            false,
 			TitleBarStyle:     mygo.TitleBarHiddenInset,

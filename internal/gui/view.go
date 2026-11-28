@@ -185,10 +185,8 @@ func (s *uiState) view(c *ui.Context) {
 		ui.Column(c).Width(164).FillHeight().Background(p.cardSub).Padding(sidebarTopPad, 10, 10, 10).Gap(10).Children(func() {
 			// Brand header (draggable)
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(7).Padding(2, 4).DragWindow().Children(func() {
-				ui.Box(c).Width(22).Height(22).Radius(radiusControl).Background(p.accent).Center().Children(func() {
-					ui.Text(c, "A").FontSize(fontBody).Bold().TextColor(p.onAccent)
-				})
-				ui.Text(c, s.tr("app.title")).FontSize(fontHeading).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+				ui.Icon(c, brandLogoSVG).Size(16, 16).TextColor(p.fg)
+				ui.Text(c, s.tr("app.title")).FontSize(fontBrand).Bold().TextColor(p.fg).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 			})
 
 			// Navigation

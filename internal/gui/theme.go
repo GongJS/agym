@@ -8,6 +8,7 @@ import "github.com/egoist/mygo/ui"
 const (
 	fontHero    float32 = 17
 	fontTitle   float32 = 14
+	fontBrand   float32 = 13
 	fontHeading float32 = 12
 	fontBody    float32 = 11
 	fontCaption float32 = 10.5
@@ -160,6 +161,7 @@ func (p palette) quotaColor(pct int) ui.Color {
 }
 
 var (
+	brandLogoSVG      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2.2 20.49,7.1 20.49,16.9 12,21.8 3.51,16.9 3.51,7.1" stroke-width="1.75"/><polygon points="12,5.9 17.28,8.95 17.28,15.05 12,18.1 6.72,15.05 6.72,8.95" stroke-width="1.45" transform="rotate(4 12 12)"/><polygon points="12,9.1 14.51,10.55 14.51,13.45 12,14.9 9.49,13.45 9.49,10.55" stroke-width="1.2"/></svg>`))
 	sunSVG            = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`))
 	moonSVG           = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`))
 	chevronRightSVG   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))

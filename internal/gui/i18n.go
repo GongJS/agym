@@ -14,7 +14,7 @@ const (
 )
 
 var messagesZH = map[string]string{
-	"app.title":               "Agy Manager",
+	"app.title":               "agym",
 	"tab.accounts":            "账户",
 	"tab.projects":            "项目",
 	"tab.settings":            "设置",
@@ -132,7 +132,7 @@ var messagesZH = map[string]string{
 }
 
 var messagesEN = map[string]string{
-	"app.title":               "Agy Manager",
+	"app.title":               "agym",
 	"tab.accounts":            "Accounts",
 	"tab.projects":            "Projects",
 	"tab.settings":            "Settings",
