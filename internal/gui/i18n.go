@@ -288,16 +288,6 @@ func formatPct(val, limit int64) string {
 	return fmt.Sprintf("%.1f%%", pct)
 }
 
-func quotaColorHex(pct int) string {
-	if pct >= 50 {
-		return "#34d399"
-	}
-	if pct >= 20 {
-		return "#fbbf24"
-	}
-	return "#f87171"
-}
-
 func (s *uiState) bucketLabel(raw string) string {
 	k := strings.ToLower(strings.TrimSpace(raw))
 	if k == "" {
