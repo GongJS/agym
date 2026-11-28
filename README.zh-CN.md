@@ -128,6 +128,13 @@ agym supervise --model <model-id>
 - [贡献指南](./CONTRIBUTING.md)
 - [安全策略](./SECURITY.md)
 
+## 致谢与参考
+
+本项目站在了前人开源项目的肩膀上，特别感谢以下项目与社区：
+
+- **[Antigravity-Manager（Antigravity Tools）](https://github.com/lbjlaq/Antigravity-Manager)**：参考了其 Antigravity 钥匙串凭证写入格式，以及通过仅重启 `language_server` 子进程实现不关主窗热切号的思路（同时兼容自动导入本地 `~/.antigravity_tools` 账号数据）。
+- **[LINUX DO](https://linux.do/)**：感谢社区的交流氛围与开源支持（真诚、友善、团结、专业）。
+
 ## 开源协议
 
 [MIT](./LICENSE)

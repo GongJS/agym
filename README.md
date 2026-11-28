@@ -129,6 +129,13 @@ To remove the hook later, run `agym remove-hook`.
 - [Contributing](./CONTRIBUTING.md)
 - [Security Policy](./SECURITY.md)
 
+## Acknowledgements
+
+This project stands on the shoulders of existing open-source work, with special thanks to the following project and community:
+
+- **[Antigravity-Manager (Antigravity Tools)](https://github.com/lbjlaq/Antigravity-Manager)**: Referenced its Antigravity Keychain credential format and the approach of hot-switching accounts without closing the main window by restarting only the `language_server` child process (while also supporting automatic import of local `~/.antigravity_tools` account data).
+- **[LINUX DO](https://linux.do/)**: Thankful for the community's open-source spirit and welcoming atmosphere (sincere, friendly, united, and professional).
+
 ## License
 
 [MIT](./LICENSE)
