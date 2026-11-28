@@ -293,144 +293,131 @@ func (s *uiState) view(c *ui.Context) {
 
 			ui.Box(c).Grow(1)
 
-			// Bottom-left active account card (2 rows: avatar+email, model)
-			hasMultiple := len(accountsCopy) > 1
-			canJumpTab := tabIdx != 0 || len(accountsCopy) == 0
-			cardInteractive := hasMultiple || canJumpTab
-			cardCursor := ui.CursorDefault
-			if cardInteractive {
-				cardCursor = ui.CursorPointer
-			}
-			cardBorder := p.line
-			if menuOpen {
-				cardBorder = p.accent
-			}
-
-			initial := "?"
-			if runes := []rune(activeEmail); len(runes) > 0 {
-				initial = strings.ToUpper(string(runes[:1]))
-			}
-			emailLabel := activeEmail
-			if emailLabel == "" {
-				emailLabel = s.tr("sidebar.noAccount")
-			}
-			modelLabel := activeModel
-			if modelLabel == "" {
-				modelLabel = s.tr("sidebar.noModel")
-			}
-			dotCol := p.muted
-			if activeEmail != "" {
-				dotCol = p.ok
-			}
-
-			accountCard := ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(10).Background(p.card).Border(1, cardBorder).Cursor(cardCursor).Disabled(!cardInteractive).Children(func() {
-				ui.Column(c).FillWidth().Gap(5).Children(func() {
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-						ui.Box(c).Width(20).Height(20).Radius(10).Background(p.accentSoft).Center().Children(func() {
-							ui.Text(c, initial).FontSize(10).Bold().TextColor(p.accent)
-						})
-						if hasMultiple {
-							ui.Icon(c, chevronsUpDownSVG).Size(12, 12).TextColor(p.muted)
-						} else if tabIdx != 0 {
-							ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
-						} else if len(accountsCopy) == 0 {
-							ui.Icon(c, plusSVG).Size(11, 11).TextColor(p.accent)
-						}
-					})
-					ui.Text(c, emailLabel).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(5).Children(func() {
-						ui.Box(c).Width(5).Height(5).Radius(3).Background(dotCol)
-						ui.Text(c, modelLabel).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
-					})
-				})
-			})
-			if accountCard.Clicked() {
-				if hasMultiple {
-					s.mu.Lock()
-					s.sidebarAccountMenuOpen = !menuOpen
-					s.mu.Unlock()
-					menuOpen = !menuOpen
-				} else if tabIdx != 0 {
-					s.switchTab(0)
-				} else if len(accountsCopy) == 0 {
-					s.mu.Lock()
-					s.showAddAccount = true
-					s.mu.Unlock()
-					s.syncWindowHeight(win)
+			// Bottom-left active account card (hidden when no accounts are configured)
+			if len(accountsCopy) > 0 {
+				hasMultiple := len(accountsCopy) > 1
+				canJumpTab := tabIdx != 0
+				cardInteractive := hasMultiple || canJumpTab
+				cardCursor := ui.CursorDefault
+				if cardInteractive {
+					cardCursor = ui.CursorPointer
 				}
-			}
+				cardBorder := p.line
+				if menuOpen {
+					cardBorder = p.accent
+				}
 
-			if hasMultiple {
-				popOpen := menuOpen
-				ui.PopoverBase(c, accountCard, &popOpen, func(panel ui.Element) {
-					panel.Attach(ui.AnchorTopLeft, ui.AnchorBottomLeft).Width(212).Padding(6).Radius(10).Background(p.card).Border(1, p.line).Children(func() {
-						ui.Column(c).FillWidth().Gap(3).Children(func() {
-							for _, a := range accountsCopy {
-								canSwitch := !a.Current && a.HasSavedLogin
-								rowCursor := ui.CursorDefault
-								if canSwitch {
-									rowCursor = ui.CursorPointer
-								}
-								rowBg := ui.Color{}
-								if a.Current {
-									rowBg = p.accentSoft
-								}
-								itemBtn := ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(7).Background(rowBg).Cursor(rowCursor).Disabled(!canSwitch && !a.Current).Children(func() {
-									ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
-										dot := p.muted
-										if a.Current {
-											dot = p.accent
-										} else if a.HasSavedLogin {
-											dot = p.ok
-										}
-										ui.Box(c).Width(6).Height(6).Radius(3).Background(dot)
-										nameColor := p.fg
-										if a.Current {
-											nameColor = p.accent
-										} else if !a.HasSavedLogin {
-											nameColor = p.muted
-										}
-										txt := ui.Text(c, a.Email).FontSize(10.5).TextColor(nameColor).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
-										if a.Current {
-											txt.Bold()
-										}
-										if a.Current {
-											ui.Text(c, s.tr("account.current")).FontSize(9).Bold().TextColor(p.accent)
-										} else if !a.HasSavedLogin {
-											ui.Text(c, s.tr("account.needLogin")).FontSize(9).TextColor(p.warnText)
-										}
-									})
-								})
-								if itemBtn.Clicked() && canSwitch {
-									popOpen = false
-									s.mu.Lock()
-									s.sidebarAccountMenuOpen = false
-									s.mu.Unlock()
-									s.switchAccountAsync(win, a.Email)
-								}
+				initial := "?"
+				if runes := []rune(activeEmail); len(runes) > 0 {
+					initial = strings.ToUpper(string(runes[:1]))
+				}
+				modelLabel := activeModel
+				if modelLabel == "" {
+					modelLabel = s.tr("sidebar.noModel")
+				}
+
+				accountCard := ui.ButtonBase(c).FillWidth().Padding(8, 9).Radius(10).Background(p.card).Border(1, cardBorder).Cursor(cardCursor).Disabled(!cardInteractive).Children(func() {
+					ui.Column(c).FillWidth().Gap(5).Children(func() {
+						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+							ui.Box(c).Width(20).Height(20).Radius(10).Background(p.accentSoft).Center().Children(func() {
+								ui.Text(c, initial).FontSize(10).Bold().TextColor(p.accent)
+							})
+							if hasMultiple {
+								ui.Icon(c, chevronsUpDownSVG).Size(12, 12).TextColor(p.muted)
+							} else if tabIdx != 0 {
+								ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
 							}
-							if tabIdx != 0 {
-								ui.Divider(c)
-								if ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(7).Cursor(ui.CursorPointer).Children(func() {
-									ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-										ui.Text(c, s.tr("sidebar.manageAccounts")).FontSize(10.5).TextColor(p.muted)
-										ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
-									})
-								}).Clicked() {
-									popOpen = false
-									s.mu.Lock()
-									s.sidebarAccountMenuOpen = false
-									s.mu.Unlock()
-									s.switchTab(0)
-								}
-							}
+						})
+						ui.Text(c, activeEmail).FontSize(10.5).Bold().TextColor(p.fg).Ellipsis("…").SingleLine()
+						ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(5).Children(func() {
+							ui.Box(c).Width(5).Height(5).Radius(3).Background(p.ok)
+							ui.Text(c, modelLabel).FontSize(9.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 						})
 					})
 				})
-				if popOpen != menuOpen {
-					s.mu.Lock()
-					s.sidebarAccountMenuOpen = popOpen
-					s.mu.Unlock()
+				if accountCard.Clicked() {
+					if hasMultiple {
+						s.mu.Lock()
+						s.sidebarAccountMenuOpen = !menuOpen
+						s.mu.Unlock()
+						menuOpen = !menuOpen
+					} else if tabIdx != 0 {
+						s.switchTab(0)
+					}
+				}
+
+				if hasMultiple {
+					popOpen := menuOpen
+					ui.PopoverBase(c, accountCard, &popOpen, func(panel ui.Element) {
+						panel.Attach(ui.AnchorTopLeft, ui.AnchorBottomLeft).Width(212).Padding(6).Radius(10).Background(p.card).Border(1, p.line).Children(func() {
+							ui.Column(c).FillWidth().Gap(3).Children(func() {
+								for _, a := range accountsCopy {
+									canSwitch := !a.Current && a.HasSavedLogin
+									rowCursor := ui.CursorDefault
+									if canSwitch {
+										rowCursor = ui.CursorPointer
+									}
+									rowBg := ui.Color{}
+									if a.Current {
+										rowBg = p.accentSoft
+									}
+									itemBtn := ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(7).Background(rowBg).Cursor(rowCursor).Disabled(!canSwitch && !a.Current).Children(func() {
+										ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+											dot := p.muted
+											if a.Current {
+												dot = p.accent
+											} else if a.HasSavedLogin {
+												dot = p.ok
+											}
+											ui.Box(c).Width(6).Height(6).Radius(3).Background(dot)
+											nameColor := p.fg
+											if a.Current {
+												nameColor = p.accent
+											} else if !a.HasSavedLogin {
+												nameColor = p.muted
+											}
+											txt := ui.Text(c, a.Email).FontSize(10.5).TextColor(nameColor).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
+											if a.Current {
+												txt.Bold()
+											}
+											if a.Current {
+												ui.Text(c, s.tr("account.current")).FontSize(9).Bold().TextColor(p.accent)
+											} else if !a.HasSavedLogin {
+												ui.Text(c, s.tr("account.needLogin")).FontSize(9).TextColor(p.warnText)
+											}
+										})
+									})
+									if itemBtn.Clicked() && canSwitch {
+										popOpen = false
+										s.mu.Lock()
+										s.sidebarAccountMenuOpen = false
+										s.mu.Unlock()
+										s.switchAccountAsync(win, a.Email)
+									}
+								}
+								if tabIdx != 0 {
+									ui.Divider(c)
+									if ui.ButtonBase(c).FillWidth().Padding(6, 8).Radius(7).Cursor(ui.CursorPointer).Children(func() {
+										ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+											ui.Text(c, s.tr("sidebar.manageAccounts")).FontSize(10.5).TextColor(p.muted)
+											ui.Icon(c, chevronRightSVG).Size(11, 11).TextColor(p.muted)
+										})
+									}).Clicked() {
+										popOpen = false
+										s.mu.Lock()
+										s.sidebarAccountMenuOpen = false
+										s.mu.Unlock()
+										s.switchTab(0)
+									}
+								}
+							})
+						})
+					})
+					if popOpen != menuOpen {
+						s.mu.Lock()
+						s.sidebarAccountMenuOpen = popOpen
+						s.mu.Unlock()
+					}
 				}
 			}
 		})
@@ -985,18 +972,22 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 		return
 	}
 
+	if len(items) == 0 {
+		ui.Column(c).FillWidth().Padding(16, 16).Gap(6).Radius(12).Background(p.card).Border(1, p.line).Children(func() {
+			ui.Text(c, s.tr("projects.emptyTitle")).FontSize(12).Bold().TextColor(p.fg)
+			ui.Text(c, s.tr("projects.emptyDesc")).FontSize(10).TextColor(p.muted)
+		})
+		return
+	}
+
 	runningCount := 0
 	for _, proj := range items {
 		if proj.Active {
 			runningCount++
 		}
 	}
-	rightPad := float32(0)
-	if len(items) > 0 {
-		rightPad = 16
-	}
 	summary := s.tr("projects.stats", len(items), runningCount)
-	ui.Row(c).FillWidth().Padding(0, rightPad, 0, 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
+	ui.Row(c).FillWidth().Padding(0, 16, 0, 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
 		ui.Text(c, summary).FontSize(10.5).TextColor(p.muted).Ellipsis("…").SingleLine().Grow(1).Shrink(1)
 		refBtn := ui.ButtonBase(c).Padding(4, 9).Radius(7).Background(p.soft).Cursor(ui.CursorPointer).Disabled(refreshing).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
@@ -1012,16 +1003,6 @@ func (s *uiState) renderProjectsTab(c *ui.Context, p palette, items []projects.P
 			s.loadProjectsAsync(win, true)
 		}
 	})
-
-	if len(items) == 0 {
-		ui.Column(c).FillWidth().Grow(1).Center().Children(func() {
-			ui.Column(c).FillWidth().Padding(24, 16).Gap(6).Radius(12).Background(p.card).Border(1, p.line).Center().Children(func() {
-				ui.Text(c, s.tr("projects.emptyTitle")).FontSize(12).Bold().TextColor(p.fg)
-				ui.Text(c, s.tr("projects.emptyDesc")).FontSize(10).TextColor(p.muted)
-			})
-		})
-		return
-	}
 
 	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
 		ui.Column(c).FillWidth().Padding(0, 16, 0, 0).Gap(8).Children(func() {
