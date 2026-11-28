@@ -178,6 +178,7 @@ func Run() error {
 			}
 		})
 		win.OnShow(func() {
+			state.clearTransientStatus()
 			if state.isProjectsTab() {
 				startPolling()
 			} else {
@@ -252,8 +253,7 @@ func (s *uiState) loadAccountsAsync(win *mygo.Window, showRefreshed bool) {
 				s.statusMsg = err.Error()
 				s.statusErr = true
 			} else if showRefreshed {
-				s.statusMsg = s.tr("status.refreshed")
-				s.statusErr = false
+				s.setStatusLocked(win, s.tr("status.refreshed"), false, true)
 			}
 		} else if err != nil && !s.switching && s.switchGen == gen {
 			s.statusMsg = err.Error()
@@ -322,8 +322,7 @@ func (s *uiState) refreshQuotasAsync(win *mygo.Window) {
 			s.statusErr = true
 		} else if s.applyAccountsLocked(gen, items) {
 			s.currentAgyModel = activeModel
-			s.statusMsg = s.tr("status.refreshed")
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.refreshed"), false, true)
 		}
 		s.mu.Unlock()
 		s.triggerUpdate(win)
@@ -374,8 +373,7 @@ func (s *uiState) loadProjectsAsync(win *mygo.Window, showRefreshed bool) {
 		} else {
 			s.applyProjectListLocked(items)
 			if showRefreshed {
-				s.statusMsg = s.tr("projects.refreshed")
-				s.statusErr = false
+				s.setStatusLocked(win, s.tr("projects.refreshed"), false, true)
 			}
 		}
 		s.mu.Unlock()

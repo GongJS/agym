@@ -56,6 +56,7 @@ type uiState struct {
 	oauthPolling      bool
 	statusMsg         string
 	statusErr         bool
+	statusGen         uint64
 	shortcutEnabled   bool
 	shortcutAccel     string
 	shortcutInput     string
@@ -104,6 +105,37 @@ func (s *uiState) applyAccountsLocked(gen uint64, items []appservice.AccountView
 		}
 	}
 	return true
+}
+
+func (s *uiState) setStatusLocked(win *mygo.Window, msg string, isErr, autoClear bool) {
+	s.statusGen++
+	gen := s.statusGen
+	s.statusMsg = msg
+	s.statusErr = isErr
+	if !autoClear || msg == "" || isErr {
+		return
+	}
+	go func() {
+		time.Sleep(4 * time.Second)
+		s.mu.Lock()
+		cleared := s.statusGen == gen && s.statusMsg == msg && !s.statusErr
+		if cleared {
+			s.statusMsg = ""
+		}
+		s.mu.Unlock()
+		if cleared {
+			s.triggerUpdate(win)
+		}
+	}()
+}
+
+func (s *uiState) clearTransientStatus() {
+	s.mu.Lock()
+	if !s.statusErr && s.statusMsg != "" {
+		s.statusGen++
+		s.statusMsg = ""
+	}
+	s.mu.Unlock()
 }
 
 func (s *uiState) view(c *ui.Context) {
@@ -1013,8 +1045,7 @@ func (s *uiState) renderProjectCard(c *ui.Context, p palette, proj projects.Proj
 						go func(path, name string) {
 							mygo.Clipboard.WriteText(path)
 							s.mu.Lock()
-							s.statusMsg = s.tr("projects.copied", name)
-							s.statusErr = false
+							s.setStatusLocked(win, s.tr("projects.copied", name), false, true)
 							s.mu.Unlock()
 							s.triggerUpdate(win)
 						}(proj.Path, proj.Name)
@@ -1196,8 +1227,7 @@ func (s *uiState) switchAccountAsync(win *mygo.Window, email string) {
 			s.statusMsg = err.Error()
 			s.statusErr = true
 		} else {
-			s.statusMsg = s.tr("status.switched", email)
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.switched", email), false, true)
 		}
 		s.mu.Unlock()
 		s.loadAccountsAsync(win, false)
@@ -1228,8 +1258,7 @@ func (s *uiState) refreshSingleAccountAsync(win *mygo.Window, email string) {
 			s.statusMsg = err.Error()
 			s.statusErr = true
 		} else if s.applyAccountsLocked(gen, items) {
-			s.statusMsg = s.tr("status.refreshed")
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.refreshed"), false, true)
 		}
 		s.mu.Unlock()
 		s.triggerUpdate(win)
@@ -1262,11 +1291,9 @@ func (s *uiState) setRotationAsync(win *mygo.Window, email string, enabled bool)
 			s.statusMsg = err.Error()
 			s.statusErr = true
 		} else if enabled {
-			s.statusMsg = s.tr("status.rotationOn", email)
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.rotationOn", email), false, true)
 		} else {
-			s.statusMsg = s.tr("status.rotationOff", email)
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.rotationOff", email), false, true)
 		}
 		s.mu.Unlock()
 		s.loadAccountsAsync(win, false)
@@ -1282,8 +1309,7 @@ func (s *uiState) removeAccountAsync(win *mygo.Window, email string) {
 			s.statusErr = true
 		} else {
 			delete(s.expandedAccounts, email)
-			s.statusMsg = s.tr("status.removed", email)
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.removed", email), false, true)
 		}
 		s.mu.Unlock()
 		s.loadAccountsAsync(win, false)
@@ -1313,12 +1339,10 @@ func (s *uiState) addAccountAsync(win *mygo.Window, email string) {
 			s.addEmail = ""
 			s.showAddAccount = false
 			s.expandedAccounts[email] = true
-			s.statusMsg = s.tr("status.added")
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.added"), false, true)
 		} else {
 			s.addEmail = ""
-			s.statusMsg = s.tr("status.exists")
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("status.exists"), false, true)
 		}
 		s.mu.Unlock()
 		s.loadAccountsAsync(win, false)
@@ -1635,8 +1659,8 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 					}
 
 					if scEnabled && scAccel != "" {
-						clearBtn := hoverBg(ui.ButtonBase(c).Width(18).Height(18).Radius(radiusSub).Background(p.muted).Center().Cursor(ui.CursorPointer), p.dangerHover).Children(func() {
-							ui.Icon(c, closeSVG).Size(10, 10).TextColor(p.card)
+						clearBtn := hoverBg(ui.ButtonBase(c).Width(18).Height(18).Radius(radiusPill).Background(p.muted).Center().Cursor(ui.CursorPointer), p.dangerHover).Children(func() {
+							ui.Icon(c, closeSVG).Size(10, 10).TextColor(p.bg)
 						})
 						if clearBtn.Clicked() {
 							s.mu.Lock()
@@ -1644,8 +1668,7 @@ func (s *uiState) renderSettingsTab(c *ui.Context, p palette) {
 							s.shortcutEnabled = false
 							s.shortcutAccel = ""
 							s.shortcutInput = ""
-							s.statusMsg = s.tr("settings.shortcutOff")
-							s.statusErr = false
+							s.setStatusLocked(win, s.tr("settings.shortcutOff"), false, true)
 							s.mu.Unlock()
 							s.applyShortcut(win)
 							go s.savePrefs()
@@ -1765,8 +1788,7 @@ func (s *uiState) applyShortcut(win *mygo.Window) {
 	} else {
 		s.registeredAccel = accel
 		if prev != "" && prev != accel {
-			s.statusMsg = s.tr("settings.shortcutSaved", formatShortcutSymbols(accel))
-			s.statusErr = false
+			s.setStatusLocked(win, s.tr("settings.shortcutSaved", formatShortcutSymbols(accel)), false, true)
 		}
 	}
 	s.mu.Unlock()

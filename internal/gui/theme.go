@@ -70,8 +70,8 @@ func currentPalette(c *ui.Context) palette {
 			card:            ui.RGBA(186, 214, 247, 0.04), // Frosted Glass
 			cardHover:       ui.RGBA(186, 214, 247, 0.08), // Frosted Glass hover
 			cardSub:         ui.RGBA(12, 15, 28, 0.94),    // Deep Glass sidebar / sub-surface
-			soft:            ui.RGBA(186, 214, 247, 0.06), // Ghost fill (DESIGN.md Pill Button)
-			softHover:       ui.RGBA(186, 214, 247, 0.12), // Hover lightens frost wash to 0.12
+			soft:            ui.RGBA(186, 214, 247, 0.11), // Deepened frost wash for clearer button surface
+			softHover:       ui.RGBA(186, 214, 247, 0.18), // Hover lightens frost wash to 0.18
 			ghostHover:      ui.RGBA(186, 214, 247, 0.06), // Transparent control hover
 			fg:              ui.RGB(209, 228, 250),        // #d1e4fa Frost Glow
 			muted:           ui.RGB(157, 167, 186),        // #9da7ba Fog Veil
@@ -105,8 +105,8 @@ func currentPalette(c *ui.Context) palette {
 		card:            ui.RGB(255, 255, 255),      // #ffffff Paper
 		cardHover:       ui.RGB(245, 248, 253),      // Subtle cool lift
 		cardSub:         ui.RGB(240, 243, 248),      // #f0f3f8 Pebble sidebar & sub-surface
-		soft:            ui.RGB(240, 243, 248),      // #f0f3f8 Pebble
-		softHover:       ui.RGB(226, 233, 243),      // Deeper Pebble on hover
+		soft:            ui.RGB(229, 235, 244),      // #e5ebf4 Deepened Pebble
+		softHover:       ui.RGB(214, 223, 237),      // #d6dfed Hover Pebble
 		ghostHover:      ui.RGBA(11, 53, 88, 0.05),  // Ink Navy wash
 		fg:              ui.RGB(11, 53, 88),         // #0b3558 Ink Navy
 		muted:           ui.RGB(71, 103, 136),       // #476788 Slate Gray

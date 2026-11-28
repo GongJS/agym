@@ -18,8 +18,8 @@ All UI code in `internal/gui` must consume these semantic roles from [`internal/
 | `card` | `rgba(186, 214, 247, 0.04)` | `#ffffff` | Primary interactive cards & popovers |
 | `cardHover` | `rgba(186, 214, 247, 0.08)` | `#f5f8fd` | Interactive card hover fill |
 | `cardSub` | `rgba(12, 15, 28, 0.94)` | `#f0f3f8` | Left sidebar & nested sub-panels |
-| `soft` | `rgba(186, 214, 247, 0.06)` | `#f0f3f8` | Secondary/ghost button & pill fill |
-| `softHover` | `rgba(186, 214, 247, 0.12)` | `#e2e9f3` | Secondary/ghost button hover fill |
+| `soft` | `rgba(186, 214, 247, 0.11)` | `#e5ebf4` | Secondary/ghost button & pill fill |
+| `softHover` | `rgba(186, 214, 247, 0.18)` | `#d6dfed` | Secondary/ghost button hover fill |
 | `ghostHover` | `rgba(186, 214, 247, 0.06)` | `rgba(11, 53, 88, 0.05)` | Transparent nav/icon button hover fill |
 | `fg` | `#d1e4fa` | `#0b3558` | Primary body text, headings, icons |
 | `muted` | `#9da7ba` | `#476788` | Secondary labels, helper copy, metadata |
