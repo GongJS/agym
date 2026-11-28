@@ -10,13 +10,13 @@ const (
 	fontTitle   float32 = 14
 	fontHeading float32 = 12
 	fontBody    float32 = 11
-	fontCaption float32 = 10
-	fontMicro   float32 = 9.5
+	fontCaption float32 = 10.5
+	fontMicro   float32 = 10
 
-	radiusCard    float32 = 12
-	radiusSub     float32 = 9
-	radiusControl float32 = 7
-	radiusSmall   float32 = 5
+	radiusCard    float32 = 16
+	radiusSub     float32 = 10
+	radiusControl float32 = 6
+	radiusSmall   float32 = 4
 	radiusPill    float32 = 999
 
 	spaceXS float32 = 4
@@ -55,54 +55,55 @@ type palette struct {
 func currentPalette(c *ui.Context) palette {
 	dark := c.Theme().Background.R < 128
 	if dark {
+		// AuthKit — "Frosted glass cathedral at midnight" (DESIGN.md / tokens.json)
 		return palette{
 			dark:       true,
-			bg:         ui.RGB(24, 26, 32),
-			card:       ui.RGBA(40, 44, 54, 0.92),
-			cardSub:    ui.RGBA(28, 31, 38, 0.90),
-			soft:       ui.RGBA(255, 255, 255, 0.08),
-			fg:         ui.RGB(240, 243, 249),
-			muted:      ui.RGB(154, 163, 178),
-			line:       ui.RGBA(255, 255, 255, 0.11),
-			accent:     ui.RGB(59, 130, 246),
-			accentSoft: ui.RGBA(59, 130, 246, 0.22),
-			onAccent:   ui.RGB(255, 255, 255),
-			ok:         ui.RGB(52, 211, 153),
-			okSoft:     ui.RGBA(52, 211, 153, 0.20),
-			danger:     ui.RGB(248, 113, 113),
-			dangerSoft: ui.RGBA(248, 113, 113, 0.16),
-			track:      ui.RGBA(255, 255, 255, 0.12),
-			fresh:      ui.RGB(139, 180, 255),
-			cache:      ui.RGB(197, 163, 255),
-			output:     ui.RGB(110, 231, 183),
-			pillBg:     ui.RGBA(255, 255, 255, 0.14),
-			pillText:   ui.RGB(240, 243, 249),
-			warnBg:     ui.RGBA(251, 191, 36, 0.18),
+			bg:         ui.RGB(5, 6, 15),               // #05060f Midnight Canvas
+			card:       ui.RGBA(186, 214, 247, 0.04),   // Frosted Glass
+			cardSub:    ui.RGBA(12, 15, 28, 0.94),      // Deep Glass sidebar / sub-surface
+			soft:       ui.RGBA(199, 211, 234, 0.10),   // Luminous Fill (#c7d3ea1f)
+			fg:         ui.RGB(209, 228, 250),          // #d1e4fa Frost Glow
+			muted:      ui.RGB(157, 167, 186),          // #9da7ba Fog Veil
+			line:       ui.RGBA(186, 215, 247, 0.12),   // #bad7f71f Glass Edge
+			accent:     ui.RGB(102, 58, 243),           // #663af3 Void Violet (CTA & active)
+			accentSoft: ui.RGBA(102, 58, 243, 0.22),    // Void Violet tint
+			onAccent:   ui.RGB(255, 255, 255),          // #ffffff Pure White
+			ok:         ui.RGB(38, 150, 132),           // #269684 Deep Teal
+			okSoft:     ui.RGBA(38, 150, 132, 0.20),
+			danger:     ui.RGB(228, 109, 76),           // #e46d4c Ember Glow
+			dangerSoft: ui.RGBA(228, 109, 76, 0.16),
+			track:      ui.RGBA(186, 215, 247, 0.12),   // Glass Edge track
+			fresh:      ui.RGB(182, 217, 252),          // #b6d9fc Blueprint Blue
+			cache:      ui.RGB(2, 125, 234),            // #027dea Signal Blue
+			output:     ui.RGB(38, 150, 132),           // #269684 Deep Teal
+			pillBg:     ui.RGBA(199, 211, 234, 0.14),   // Luminous active pill
+			pillText:   ui.RGB(216, 236, 248),          // #d8ecf8 Ice Highlight
+			warnBg:     ui.RGBA(251, 191, 36, 0.16),
 			warnText:   ui.RGB(251, 191, 36),
-			highBg:     ui.RGBA(248, 113, 113, 0.20),
+			highBg:     ui.RGBA(228, 109, 76, 0.20),
 		}
 	}
 	return palette{
-		bg:         ui.RGB(244, 246, 251),
+		bg:         ui.RGB(244, 246, 252),
 		card:       ui.RGBA(255, 255, 255, 0.96),
-		cardSub:    ui.RGB(248, 250, 253),
+		cardSub:    ui.RGB(238, 242, 250),
 		soft:       ui.RGBA(15, 23, 42, 0.06),
-		fg:         ui.RGB(18, 24, 38),
-		muted:      ui.RGB(100, 116, 139),
+		fg:         ui.RGB(15, 23, 42),
+		muted:      ui.RGB(94, 106, 128),
 		line:       ui.RGBA(15, 23, 42, 0.10),
-		accent:     ui.RGB(37, 99, 235),
-		accentSoft: ui.RGBA(37, 99, 235, 0.12),
+		accent:     ui.RGB(102, 58, 243),
+		accentSoft: ui.RGBA(102, 58, 243, 0.12),
 		onAccent:   ui.RGB(255, 255, 255),
-		ok:         ui.RGB(16, 185, 129),
-		okSoft:     ui.RGBA(16, 185, 129, 0.20),
+		ok:         ui.RGB(38, 150, 132),
+		okSoft:     ui.RGBA(38, 150, 132, 0.16),
 		danger:     ui.RGB(220, 38, 38),
 		dangerSoft: ui.RGBA(220, 38, 38, 0.10),
 		track:      ui.RGBA(15, 23, 42, 0.10),
-		fresh:      ui.RGB(139, 180, 255),
-		cache:      ui.RGB(197, 163, 255),
-		output:     ui.RGB(110, 231, 183),
+		fresh:      ui.RGB(2, 125, 234),
+		cache:      ui.RGB(102, 58, 243),
+		output:     ui.RGB(38, 150, 132),
 		pillBg:     ui.RGB(255, 255, 255),
-		pillText:   ui.RGB(18, 24, 38),
+		pillText:   ui.RGB(15, 23, 42),
 		warnBg:     ui.RGBA(245, 158, 11, 0.16),
 		warnText:   ui.RGB(180, 83, 9),
 		highBg:     ui.RGBA(220, 38, 38, 0.14),
