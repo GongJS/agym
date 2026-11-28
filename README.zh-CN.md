@@ -2,7 +2,15 @@
 
 简体中文 | [English](./README.md)
 
-面向 `agy` 的轻量级纯 Go 多账户与项目上下文管理工具：提供菜单栏托盘弹窗与命令行 CLI（单二进制分发），支持安全切换登录态、分组查看 Gemini/Claude 配额窗口、实时监控各项目上下文窗口与 Token 占用。
+<p>
+  <a href="https://github.com/GongJS/agym/releases"><img src="https://img.shields.io/badge/version-0.2.4-663AF3" alt="版本 0.2.4"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-006BFF" alt="支持 macOS 与 Windows">
+  <a href="https://github.com/egoist/mygo"><img src="https://img.shields.io/badge/built%20with-Go%20%2B%20MyGo-00ADD8?logo=go&amp;logoColor=white" alt="使用 Go 与 MyGo 原生开发"></a>
+  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub%20Actions-2088ff?logo=githubactions&amp;logoColor=white" alt="CI 工作流配置"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-269684" alt="MIT 许可证"></a>
+</p>
+
+面向 `agy` 的轻量级纯 Go 多账户与项目上下文管理工具：提供居中双栏原生窗口、系统托盘与命令行 CLI（单二进制分发），支持安全切换登录态、分组查看 Gemini/Claude 配额窗口、实时监控各项目上下文窗口与 Token 占用。
 
 基于纯 Go 与 [MyGo](https://github.com/egoist/mygo) 原生 GPU UI（macOS Metal / Windows Direct3D 11）构建——**无 WebView 子进程**、**零 CGO**。
 
@@ -14,16 +22,16 @@
 
 ## 核心特性
 
-- **纯 Go 原生 GPU UI + CLI 单二进制**：直接运行 `agym`（或 `agym ui`）启动无边框菜单栏浮窗，带子命令时作为 CLI 使用；彻底摆脱 `WKWebView` 与浏览器辅助进程。
+- **纯 Go 原生 GPU UI + CLI 单二进制**：直接运行 `agym`（或 `agym ui`）启动居中双栏桌面窗口（保留托盘入口），带子命令时作为 CLI 使用；彻底摆脱 `WKWebView` 与浏览器辅助进程。
 - **账户与模型分组配额**：
-  - 按 `Gemini` 与 `Claude · GPT` 两组分别展示支持的模型标签、`5 小时` / `每周` 配额进度条、重置倒计时与订阅等级（`Free` / `Google AI Pro` / `Ultra`）。
-  - 自动读取 `~/.gemini/antigravity-cli/settings.json` 中的当前模型，在顶部与对应模型胶囊处高亮显示。
-  - 每张账户卡片配有独立的 `↻` 刷新按钮；每次打开托盘后台静默刷新一次（当前账户优先返回），切换账户支持乐观更新零卡顿。
+  - 按 `Gemini` 与 `Claude · GPT` 两组分别展示支持的模型标签、`5 小时` / `每周` 配额进度条、重置倒计时、缓存过期/失败提示与订阅等级（`Free` / `Google AI Pro` / `Ultra`）。
+  - 侧边栏左下角实时展示当前激活账户与模型，当前账户卡片内高亮对应模型胶囊。
+  - 支持单卡刷新与顶部 `刷新全部`，打开窗口按 TTL 后台静默更新，切换账户采用乐观更新零卡顿。
 - **项目上下文与 Token 实时监控**：
   - 独立「项目」Tab 展示各工作区运行状态（运行中 / 空闲）、80 格（20×4）上下文点阵图（`新增输入`、`缓存命中`、`模型输出`、`剩余空间` 数量与占比）、步数及累计 Token。
   - 基于 `mtime + offset` 增量解析 `transcript.jsonl`，停留在项目 Tab 时每 5 秒刷新当前列表状态；支持移除项目卡片（项目再次运行 `agy` 时自动去重恢复）。
-- **安全的钥匙串切换与官方 OAuth 登录**：通过 macOS Keychain（`gemini-agy-backup/<email>`）备份多账号登录态并配合 `slot.lock` 跨进程锁切换，支持托盘内直接拉起官方 OAuth 登录，原始凭据不离开后端。
-- **浅色 / 深色主题与中英双语**：右上角提供太阳/月亮主题切换按钮与 `EN` / `中文` 一键切换。
+- **安全的钥匙串切换与官方 OAuth 登录**：通过 macOS Keychain（`gemini-agy-backup/<email>`）备份多账号登录态并配合 `slot.lock` 跨进程锁切换，支持应用内直接拉起官方 OAuth 登录，原始凭据不离开后端。
+- **双主题、中英双语与全局快捷键**：独立「设置」Tab 集中管理深色（AuthKit）/ 浅色（Calendly）/ 跟随系统主题、`简体中文` / `English` 切换、全局显示/隐藏快捷键以及应用内检查更新。
 - **会话额度接力（CLI）**：提供 `supervise` 与 Stop Hook，在外部终端中遇到严格配额耗尽事件时自动切换健康账户并续跑原会话。
 
 ## 核心优势：原生 PTY + Supervisor（对比 ACP 客户端）

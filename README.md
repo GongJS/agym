@@ -2,7 +2,15 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-A lightweight, pure-Go menu bar tray app and CLI for managing multiple `agy` Google accounts, monitoring Gemini/Claude quota windows, tracking per-workspace context window & token usage, and safely switching Keychain credentials.
+<p>
+  <a href="https://github.com/GongJS/agym/releases"><img src="https://img.shields.io/badge/version-0.2.4-663AF3" alt="Version 0.2.4"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-006BFF" alt="macOS and Windows">
+  <a href="https://github.com/egoist/mygo"><img src="https://img.shields.io/badge/built%20with-Go%20%2B%20MyGo-00ADD8?logo=go&amp;logoColor=white" alt="Built with Go and MyGo"></a>
+  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub%20Actions-2088ff?logo=githubactions&amp;logoColor=white" alt="GitHub Actions CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-269684" alt="MIT License"></a>
+</p>
+
+A lightweight, pure-Go desktop manager and CLI for managing multiple `agy` Google accounts, monitoring Gemini/Claude quota windows, tracking per-workspace context window & token usage, and safely switching Keychain credentials.
 
 Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) native GPU UI (macOS Metal / Windows Direct3D 11) — **zero WebView processes** and **zero CGO**.
 
@@ -14,16 +22,16 @@ Built as a single pure-Go binary with [MyGo](https://github.com/egoist/mygo) nat
 
 ## Features
 
-- **Pure-Go Native GPU UI & CLI in One Binary**: Run `agym` (or `agym ui`) for the borderless menu bar popover, or invoke subcommands directly from the terminal. No `WKWebView` or browser helper processes.
+- **Pure-Go Native GPU UI & CLI in One Binary**: Run `agym` (or `agym ui`) for the centered two-column desktop window with menu bar tray support, or invoke subcommands directly from the terminal. No `WKWebView` or browser helper processes.
 - **Accounts & Grouped Model Quotas**:
-  - Displays `Gemini` and `Claude · GPT` quota groups separately with supported model tags, `5h` / `Weekly` progress bars, reset countdowns, and subscription tiers (`Free` / `Google AI Pro` / `Ultra`).
-  - Highlights the active global `agy` model from `~/.gemini/antigravity-cli/settings.json`.
-  - Per-card `↻` refresh button, automatic background refresh on tray open (current account prioritized first), and zero-delay optimistic account switching.
+  - Displays `Gemini` and `Claude · GPT` quota groups separately with supported model tags, `5h` / `Weekly` progress bars, reset countdowns, stale/failure indicators, and subscription tiers (`Free` / `Google AI Pro` / `Ultra`).
+  - Highlights the active account & model in the sidebar footer, plus the active model tag inside the current account card.
+  - Per-card and batch `Refresh All` controls, automatic TTL-aware background refresh on window open, and zero-delay optimistic account switching.
 - **Projects Context & Token Monitor**:
   - Dedicated **Projects** tab showing active (`Running`) and idle `agy` workspaces with an 80-cell (20×4) dot-matrix context window breakdown (`Fresh input`, `Cache read`, `Output`, `Free space`), cumulative tokens, and step counts.
   - Incremental `transcript.jsonl` caching (`mtime + offset`) with 5-second live polling while viewing, plus one-click project dismissal (automatically re-appears when `agy` runs again in that workspace).
-- **Safe Keychain Switching & OAuth Onboarding**: Stores account backups under `gemini-agy-backup/<email>` in macOS Keychain with a cross-process `slot.lock`. Supports in-tray official `agy` OAuth sign-in. Raw tokens never leave the backend.
-- **Light / Dark Theme & Bilingual UI**: Built-in Sun/Moon theme toggle and `EN` / `中文` language toggle.
+- **Safe Keychain Switching & OAuth Onboarding**: Stores account backups under `gemini-agy-backup/<email>` in macOS Keychain with a cross-process `slot.lock`. Supports in-app official `agy` OAuth sign-in. Raw tokens never leave the backend.
+- **Dual Themes, Bilingual UI & Global Shortcut**: Dedicated **Settings** tab for Dark (*Midnight Glass*) / Light (*Cool Marble*) / System themes, `中文` / `English` language switching, global show/hide shortcut, and in-app update checks.
 - **Session Handoff Supervisor**: Optional CLI `supervise` mode + Stop hook for mid-conversation quota-exhaustion account rotation in external terminals.
 
 ## Why Native PTY + Supervisor (vs. ACP Clients)
