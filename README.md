@@ -1,14 +1,22 @@
-# agym
+<div align="center">
 
-[简体中文](./README.zh-CN.md) | English
+<img src="./docs/screenshots/banner.svg" alt="agym" width="100%" />
+
+<br />
+
+**English** | [简体中文](./README.zh-CN.md)
 
 <p>
-  <a href="https://github.com/GongJS/agym/releases"><img src="https://img.shields.io/badge/version-0.2.4-663AF3" alt="Version 0.2.4"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-006BFF" alt="macOS and Windows">
-  <a href="https://github.com/egoist/mygo"><img src="https://img.shields.io/badge/built%20with-Go%20%2B%20MyGo-00ADD8?logo=go&amp;logoColor=white" alt="Built with Go and MyGo"></a>
-  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub%20Actions-2088ff?logo=githubactions&amp;logoColor=white" alt="GitHub Actions CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-269684" alt="MIT License"></a>
+  <a href="https://github.com/GongJS/agym/releases"><img src="https://img.shields.io/badge/Version-0.2.4-663AF3?style=flat-square" alt="Version 0.2.4"></a>
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-006BFF?style=flat-square" alt="macOS and Windows">
+  <a href="https://github.com/egoist/mygo"><img src="https://img.shields.io/badge/Built%20with-Go%20%2B%20MyGo-00ADD8?style=flat-square&amp;logo=go&amp;logoColor=white" alt="Built with Go and MyGo"></a>
+  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub%20Actions-2088ff?style=flat-square&amp;logo=githubactions&amp;logoColor=white" alt="GitHub Actions CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-269684?style=flat-square" alt="MIT License"></a>
 </p>
+
+</div>
+
+---
 
 A lightweight, pure-Go desktop manager and CLI for managing multiple `agy` Google accounts, monitoring Gemini/Claude quota windows, tracking per-workspace context window & token usage, and safely switching Keychain credentials.
 
